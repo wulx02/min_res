@@ -1,0 +1,17 @@
+* text=auto eol=lf
+
+*.rs text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.lock text eol=lf
+*.csv -text -diff
+Makefile text eol=lf
+
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gz binary
+*.zip binary
+*.checkpoint.json binary

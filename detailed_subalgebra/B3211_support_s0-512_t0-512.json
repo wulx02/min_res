@@ -1,0 +1,29 @@
+{
+  "algebra": "B3211",
+  "binary_file": "B3211_support_s0-512_t0-512.bin",
+  "binary_sha256": "9d02adfa4aa1a6db62977acfbebeb3f6cbd09dfbdec22321230b69fb86dbcf41",
+  "bit_count": 263169,
+  "bounds": {
+    "s_max": 512,
+    "s_min": 0,
+    "t_max": 512,
+    "t_min": 0
+  },
+  "byte_count": 32897,
+  "format": "raw-bitset",
+  "indexing": {
+    "bit": "index % 8",
+    "bit_order": "least-significant-bit first in each byte",
+    "byte": "index // 8",
+    "formula": "index = (s - s_min) * t_count + (t - t_min)",
+    "value": "1 iff the (s,t)-graded piece has positive rank; 0 iff rank is zero or absent"
+  },
+  "max_rank": 111,
+  "nonzero_bidegrees": 74778,
+  "positive_rank_sum": 1602710,
+  "shape": [
+    513,
+    513
+  ],
+  "version": 1
+}

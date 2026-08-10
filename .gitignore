@@ -1,0 +1,24 @@
+/target/
+.DS_Store
+**/.DS_Store
+
+# Generated checkpoints and reports.
+*.sharded/
+nassau_min_res.sharded/
+.*.tmp-*/
+resolution_*.txt
+*.pack
+*.tmp
+
+# Local run products.
+/runs/
+/logs/
+/exports/
+/results/
+/output/
+/tmp/
+
+# Python and profiling artifacts.
+__pycache__/
+*.py[cod]
+*.profraw

@@ -1,0 +1,19 @@
+[package]
+name = "nassau_min_res"
+version = "0.1.0"
+edition = "2024"
+description = "Compute minimal resolutions over the mod-2 Steenrod algebra"
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/wulx02/nassau_min_res"
+publish = false
+
+[dependencies]
+libc = "0.2"
+rayon = "1.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"

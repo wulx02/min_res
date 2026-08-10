@@ -1,0 +1,99 @@
+{
+  "algebra": "May E4=E7 homology presentation over F_2",
+  "binary_sha256": "5d6af38ea8f57b1b9c5eb0bed091bfb4499aae48b26696ba7fe4808095c789d7",
+  "bit_count": 263169,
+  "bounds": {
+    "s_max": 512,
+    "s_min": 0,
+    "t_max": 512,
+    "t_min": 0
+  },
+  "byte_count": 32897,
+  "format": "raw-bitset",
+  "generator_degrees": [
+    [
+      1,
+      1
+    ],
+    [
+      1,
+      2
+    ],
+    [
+      1,
+      4
+    ],
+    [
+      3,
+      11
+    ],
+    [
+      3,
+      15
+    ],
+    [
+      3,
+      18
+    ],
+    [
+      4,
+      12
+    ],
+    [
+      4,
+      18
+    ],
+    [
+      4,
+      21
+    ],
+    [
+      4,
+      24
+    ],
+    [
+      5,
+      30
+    ],
+    [
+      7,
+      39
+    ],
+    [
+      8,
+      56
+    ]
+  ],
+  "generator_names": [
+    "X0",
+    "X1",
+    "X2",
+    "X3",
+    "X4",
+    "X5",
+    "X6",
+    "X7",
+    "X8",
+    "X9",
+    "X10",
+    "X11",
+    "X12"
+  ],
+  "groebner_initial_monomial_count_exported": 83,
+  "groebner_initial_monomial_count_minimal_used": 83,
+  "indexing": {
+    "bit": "index % 8",
+    "bit_order": "least-significant-bit first in each byte",
+    "byte": "index // 8",
+    "formula": "index = s * 513 + t",
+    "value": "1 iff the (s,t)-graded piece is nonzero; 0 iff it is zero"
+  },
+  "nonzero_bidegrees": 42324,
+  "relation_count": 54,
+  "shape": [
+    513,
+    513
+  ],
+  "standard_monomials_in_box": 171807,
+  "version": 1
+}
