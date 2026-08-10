@@ -12,7 +12,7 @@ From the repository root:
 cargo build --release --locked
 ```
 
-The optimized executable is:
+The executable is:
 
 ```text
 target/release/nassau_min_res
