@@ -137,6 +137,7 @@ fn compute_cmd(args: &[String]) -> Result<(), String> {
     let compute_timer = Instant::now();
     let mut final_cursor = start_cursor;
     let mut last_checkpoint_t = start_cursor.next_t.saturating_sub(1);
+    let mut last_auto_saved_checkpoint = None;
     let mut layer_t = start_cursor.next_t;
     let mut layer_timer = Instant::now();
     let mut layer_usage = ProcessUsage::now();
@@ -176,7 +177,13 @@ fn compute_cmd(args: &[String]) -> Result<(), String> {
             if !cursor.is_complete_for(max_t)
                 && checkpoint_is_due(checkpoint_schedule, cursor, last_checkpoint_t)
             {
-                save_checkpoint_if_enabled(checkpoint_paths.save.as_ref(), res, cursor, verbose)?;
+                save_checkpoint_for_cursor(
+                    &checkpoint_paths,
+                    res,
+                    cursor,
+                    verbose,
+                    &mut last_auto_saved_checkpoint,
+                )?;
                 last_checkpoint_t = cursor.next_t.saturating_sub(1);
             }
             if completed_layer {
@@ -186,7 +193,13 @@ fn compute_cmd(args: &[String]) -> Result<(), String> {
             }
             Ok(())
         })?;
-    save_checkpoint_if_enabled(checkpoint_paths.save.as_ref(), &res, final_cursor, verbose)?;
+    save_checkpoint_for_cursor(
+        &checkpoint_paths,
+        &res,
+        final_cursor,
+        verbose,
+        &mut last_auto_saved_checkpoint,
+    )?;
     let compute_s = compute_timer.elapsed().as_secs_f64();
 
     if let Some(path) = output {
@@ -361,6 +374,7 @@ struct CheckpointPaths {
     save: Option<PathBuf>,
     load_required: bool,
     auto_discover_load: bool,
+    save_by_completed_t: bool,
 }
 
 fn checkpoint_paths_for(args: &[String], max_t: usize) -> Result<CheckpointPaths, String> {
@@ -379,6 +393,7 @@ fn checkpoint_paths_for(args: &[String], max_t: usize) -> Result<CheckpointPaths
             save: None,
             load_required: false,
             auto_discover_load: false,
+            save_by_completed_t: false,
         });
     }
 
@@ -395,6 +410,7 @@ fn checkpoint_paths_for(args: &[String], max_t: usize) -> Result<CheckpointPaths
 
     let explicit_load = load_checkpoint.is_some();
     let auto_discover_load = !explicit_load && legacy_checkpoint.is_none();
+    let save_by_completed_t = save_checkpoint.is_none() && legacy_checkpoint.is_none();
     let load_required = explicit_load;
     let load = load_checkpoint
         .or_else(|| legacy_checkpoint.clone())
@@ -408,6 +424,7 @@ fn checkpoint_paths_for(args: &[String], max_t: usize) -> Result<CheckpointPaths
         save,
         load_required,
         auto_discover_load,
+        save_by_completed_t,
     })
 }
 
@@ -655,13 +672,28 @@ fn load_sharded_checkpoint_for_compute(
     Ok((resolution, cursor))
 }
 
-fn save_checkpoint_if_enabled(
-    checkpoint_path: Option<&PathBuf>,
+fn checkpoint_save_path(
+    checkpoint_paths: &CheckpointPaths,
+    cursor: ComputeCursor,
+) -> Option<PathBuf> {
+    checkpoint_paths.save.as_ref().map(|configured_path| {
+        if checkpoint_paths.save_by_completed_t {
+            default_checkpoint_path(cursor.next_t.saturating_sub(1))
+        } else {
+            configured_path.clone()
+        }
+    })
+}
+
+fn save_checkpoint_for_cursor(
+    checkpoint_paths: &CheckpointPaths,
     resolution: &Resolution,
     cursor: ComputeCursor,
     verbose: bool,
+    last_auto_saved_checkpoint: &mut Option<PathBuf>,
 ) -> Result<(), String> {
-    if let Some(path) = checkpoint_path {
+    let checkpoint_path = checkpoint_save_path(checkpoint_paths, cursor);
+    if let Some(path) = checkpoint_path.as_ref() {
         if let Some(parent) = path
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
@@ -697,6 +729,27 @@ fn save_checkpoint_if_enabled(
             );
         } else {
             eprintln!("saved checkpoint {}", path.display());
+        }
+
+        if checkpoint_paths.save_by_completed_t {
+            if let Some(previous) = last_auto_saved_checkpoint.as_ref()
+                && previous != path
+            {
+                sharded_io::remove_verified_checkpoint(previous).map_err(|error| {
+                    format!(
+                        "saved checkpoint {}, but failed to remove superseded intermediate checkpoint {}: {error}",
+                        path.display(),
+                        previous.display()
+                    )
+                })?;
+                if verbose {
+                    eprintln!(
+                        "checkpoint nassau_min_res removed_superseded checkpoint={}",
+                        previous.display()
+                    );
+                }
+            }
+            *last_auto_saved_checkpoint = Some(path.clone());
         }
     }
     Ok(())
@@ -1611,7 +1664,9 @@ Algorithm options:
 
 Checkpoint and memory tuning:
   --checkpoint-every-layers N  Save after every N completed t layers
-                               (default: save only at the end; use 1 for every layer)
+                               using the actual completed t in the default path;
+                               only the newest intermediate from this run is kept
+                               (default: final only; use 1 for every layer)
   --cache-prune-min-t N
   --cache-window-t N
   --e0-cache-scope VALUE
@@ -1717,6 +1772,17 @@ mod cli_tests {
         assert_eq!(paths.load, expected);
         assert_eq!(paths.save, expected);
         assert!(paths.auto_discover_load);
+        assert!(paths.save_by_completed_t);
+        assert_eq!(
+            checkpoint_save_path(
+                &paths,
+                ComputeCursor {
+                    next_t: 61,
+                    next_s: 0
+                }
+            ),
+            Some(PathBuf::from("checkpoint/t60.checkpoint"))
+        );
 
         let explicit = checkpoint_paths_for(
             &args(&["--checkpoint", "runs/local/resolution.checkpoint"]),
@@ -1727,6 +1793,17 @@ mod cli_tests {
         assert_eq!(explicit.load, explicit_path);
         assert_eq!(explicit.save, explicit_path);
         assert!(!explicit.auto_discover_load);
+        assert!(!explicit.save_by_completed_t);
+        assert_eq!(
+            checkpoint_save_path(
+                &explicit,
+                ComputeCursor {
+                    next_t: 61,
+                    next_s: 0
+                }
+            ),
+            Some(PathBuf::from("runs/local/resolution.checkpoint"))
+        );
     }
 
     #[test]

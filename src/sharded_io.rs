@@ -197,6 +197,16 @@ pub fn write_sharded_checkpoint(
     Ok(manifest)
 }
 
+pub fn remove_verified_checkpoint(dir: &Path) -> Result<(), String> {
+    validate_replaceable_checkpoint_dir(dir)?;
+    fs::remove_dir_all(dir).map_err(|error| {
+        format!(
+            "failed to remove verified checkpoint {}: {error}",
+            dir.display()
+        )
+    })
+}
+
 pub fn export_sharded_generators_csv(
     checkpoint_dir: &Path,
     max_t: usize,
@@ -1127,6 +1137,38 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         root
+    }
+
+    #[test]
+    fn verified_checkpoint_removal_refuses_unrelated_directory() {
+        let root = fresh_test_root("checkpoint_removal_guard");
+        let target = root.join("important");
+        fs::create_dir(&target).unwrap();
+        fs::write(target.join("notes.txt"), b"keep me").unwrap();
+
+        let error = remove_verified_checkpoint(&target).unwrap_err();
+        assert!(error.contains("unexpected entry"));
+        assert_eq!(fs::read(target.join("notes.txt")).unwrap(), b"keep me");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn verified_checkpoint_removal_removes_only_valid_checkpoint() {
+        let root = fresh_test_root("checkpoint_removal_valid");
+        let target = root.join("generated.checkpoint");
+        write_sharded_checkpoint(
+            &target,
+            &Resolution::new(0),
+            ComputeCursor::start(),
+            None,
+            None,
+            false,
+        )
+        .unwrap();
+
+        remove_verified_checkpoint(&target).unwrap();
+        assert!(!target.exists());
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

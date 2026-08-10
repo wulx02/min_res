@@ -77,9 +77,13 @@ layers. The final checkpoint is always written:
 ```
 
 This saves after every 10 newly completed layers. Use
-`--checkpoint-every-layers 1` to save after every layer. Intermediate saves
-update `checkpoint/t140.checkpoint`, the checkpoint named for the requested
-target.
+`--checkpoint-every-layers 1` to save after every layer. Each intermediate
+checkpoint is named for the layer it actually contains: for example, the save
+after completing `t=110` is `checkpoint/t110.checkpoint`. After the next
+checkpoint has been fully written and verified, the previous intermediate
+checkpoint created by the same process is removed. Thus a run does not leave a
+checkpoint for every interval. The checkpoint loaded at startup is not removed,
+and explicitly named checkpoint paths continue to be updated in place.
 
 For example, after completing `--t 100`, extend the calculation with:
 

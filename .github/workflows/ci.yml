@@ -50,10 +50,13 @@ jobs:
             cat compute.stderr
             exit 1
           fi
-          "$binary" compute --t 14 > resume.stdout 2> resume.stderr
+          "$binary" compute --t 14 --checkpoint-every-layers 1 \
+            > resume.stdout 2> resume.stderr
           grep -qx 'resuming checkpoint/t12.checkpoint at t=13' resume.stderr
+          grep -qx 'saved checkpoint checkpoint/t13.checkpoint' resume.stderr
           grep -qx 'saved checkpoint checkpoint/t14.checkpoint' resume.stderr
           test -d checkpoint/t12.checkpoint
+          test ! -e checkpoint/t13.checkpoint
           test -d checkpoint/t14.checkpoint
           "$binary" checkpoint verify \
             --checkpoint "$smoke_dir/checkpoint/t14.checkpoint"
