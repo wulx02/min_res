@@ -22,8 +22,8 @@ use subalgebra::{
     set_subalgebra_selection_mode,
 };
 
-const DEFAULT_EXPORT_PATH: &str = "exports/current_basis.csv";
-const DEFAULT_CHECKPOINT_PATH: &str = "nassau_min_res.checkpoint";
+const DEFAULT_CHECKPOINT_DIR: &str = "checkpoint";
+const DEFAULT_CSV_OUTPUT_DIR: &str = "csv_output";
 const DEFAULT_CACHE_WINDOW_T: usize = 8;
 const MAX_DEFAULT_FIXED_T_BATCH_WORKERS: usize = 4;
 const FULL_NAIVE_BATCH_DIAGNOSTIC_MAX_T: usize = 64;
@@ -72,7 +72,7 @@ fn compute_cmd(args: &[String]) -> Result<(), String> {
     let output = parse_string_flag_any(args, &["--output", "--out"])?.map(PathBuf::from);
     let show_differentials = has_flag(args, "--show-differentials");
     let show_steps = has_flag(args, "--show-steps");
-    let checkpoint_paths = checkpoint_paths_for(args, output.as_ref(), max_t)?;
+    let checkpoint_paths = checkpoint_paths_for(args, max_t)?;
     let fresh = has_flag(args, "--fresh");
     let verbose = has_flag(args, "--verbose");
     let checkpoint_schedule = checkpoint_schedule_for(args)?;
@@ -117,6 +117,7 @@ fn compute_cmd(args: &[String]) -> Result<(), String> {
         max_t,
         checkpoint_paths.load.as_ref(),
         checkpoint_paths.load_required,
+        checkpoint_paths.auto_discover_load,
         fresh,
         verbose,
     )?;
@@ -359,13 +360,10 @@ struct CheckpointPaths {
     load: Option<PathBuf>,
     save: Option<PathBuf>,
     load_required: bool,
+    auto_discover_load: bool,
 }
 
-fn checkpoint_paths_for(
-    args: &[String],
-    output: Option<&PathBuf>,
-    max_t: usize,
-) -> Result<CheckpointPaths, String> {
+fn checkpoint_paths_for(args: &[String], max_t: usize) -> Result<CheckpointPaths, String> {
     if has_flag(args, "--no-checkpoint") {
         if parse_string_flag(args, "--checkpoint")?.is_some()
             || parse_string_flag(args, "--load-checkpoint")?.is_some()
@@ -380,6 +378,7 @@ fn checkpoint_paths_for(
             load: None,
             save: None,
             load_required: false,
+            auto_discover_load: false,
         });
     }
 
@@ -392,33 +391,89 @@ fn checkpoint_paths_for(
                 .to_string(),
         );
     }
-    let default_checkpoint = output
-        .map(|path| default_checkpoint_path(path.as_path()))
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_CHECKPOINT_PATH));
+    let default_checkpoint = default_checkpoint_path(max_t);
 
     let explicit_load = load_checkpoint.is_some();
+    let auto_discover_load = !explicit_load && legacy_checkpoint.is_none();
     let load_required = explicit_load;
     let load = load_checkpoint
         .or_else(|| legacy_checkpoint.clone())
         .or_else(|| Some(default_checkpoint.clone()));
     let save = save_checkpoint
         .or_else(|| legacy_checkpoint.clone())
-        .or_else(|| {
-            explicit_load.then(|| PathBuf::from(format!("nassau_min_res_t{max_t}.checkpoint")))
-        })
         .or_else(|| Some(default_checkpoint.clone()));
 
     Ok(CheckpointPaths {
         load,
         save,
         load_required,
+        auto_discover_load,
     })
 }
 
-fn default_checkpoint_path(output: &Path) -> PathBuf {
-    let mut path = output.as_os_str().to_os_string();
-    path.push(".checkpoint");
-    PathBuf::from(path)
+fn default_checkpoint_path(max_t: usize) -> PathBuf {
+    Path::new(DEFAULT_CHECKPOINT_DIR).join(format!("t{max_t}.checkpoint"))
+}
+
+fn default_csv_output_path(max_t: usize) -> PathBuf {
+    Path::new(DEFAULT_CSV_OUTPUT_DIR).join(format!("t{max_t}.csv"))
+}
+
+fn checkpoint_degree_from_name(name: &str) -> Option<usize> {
+    name.strip_prefix('t')?
+        .strip_suffix(".checkpoint")?
+        .parse()
+        .ok()
+}
+
+fn latest_checkpoint_in_dir(dir: &Path, max_t: usize) -> Result<Option<PathBuf>, String> {
+    if !dir.exists() {
+        return Ok(None);
+    }
+    if !dir.is_dir() {
+        return Err(format!(
+            "default checkpoint location {} exists but is not a directory",
+            dir.display()
+        ));
+    }
+
+    let mut latest: Option<(usize, PathBuf)> = None;
+    for entry in std::fs::read_dir(dir).map_err(|err| {
+        format!(
+            "failed to read checkpoint directory {}: {err}",
+            dir.display()
+        )
+    })? {
+        let entry = entry.map_err(|err| {
+            format!(
+                "failed to read an entry in checkpoint directory {}: {err}",
+                dir.display()
+            )
+        })?;
+        let file_type = entry.file_type().map_err(|err| {
+            format!(
+                "failed to inspect checkpoint candidate {}: {err}",
+                entry.path().display()
+            )
+        })?;
+        if !file_type.is_dir() {
+            continue;
+        }
+        let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
+            continue;
+        };
+        let Some(t) = checkpoint_degree_from_name(&name) else {
+            continue;
+        };
+        if t <= max_t && latest.as_ref().is_none_or(|(latest_t, _)| t > *latest_t) {
+            latest = Some((t, entry.path()));
+        }
+    }
+    Ok(latest.map(|(_, path)| path))
+}
+
+fn latest_default_checkpoint(max_t: usize) -> Result<Option<PathBuf>, String> {
+    latest_checkpoint_in_dir(Path::new(DEFAULT_CHECKPOINT_DIR), max_t)
 }
 
 fn checkpoint_display(path: Option<&PathBuf>) -> String {
@@ -491,6 +546,7 @@ fn load_or_start(
     max_t: usize,
     checkpoint_path: Option<&PathBuf>,
     checkpoint_required: bool,
+    auto_discover_load: bool,
     fresh: bool,
     verbose: bool,
 ) -> Result<(Resolution, ComputeCursor), String> {
@@ -513,13 +569,21 @@ fn load_or_start(
         return Ok((Resolution::new(max_t), ComputeCursor::start()));
     }
 
-    if path.exists() {
-        let (resolution, cursor) = load_sharded_checkpoint_for_compute(path, max_t)?;
+    let load_path = if path.exists() {
+        Some(path.clone())
+    } else if auto_discover_load {
+        latest_default_checkpoint(max_t)?
+    } else {
+        None
+    };
+
+    if let Some(load_path) = load_path {
+        let (resolution, cursor) = load_sharded_checkpoint_for_compute(&load_path, max_t)?;
         if cursor.is_complete_for(max_t) {
             if verbose {
                 eprintln!(
                     "checkpoint nassau_min_res start=complete checkpoint={} next_t={} next_s={} generators={}",
-                    path.display(),
+                    load_path.display(),
                     cursor.next_t,
                     cursor.next_s,
                     resolution.generator_count()
@@ -527,7 +591,7 @@ fn load_or_start(
             } else {
                 eprintln!(
                     "loaded checkpoint {} through t={}",
-                    path.display(),
+                    load_path.display(),
                     cursor.next_t.saturating_sub(1)
                 );
             }
@@ -535,13 +599,13 @@ fn load_or_start(
             if verbose {
                 eprintln!(
                     "checkpoint nassau_min_res start=resume checkpoint={} next_t={} next_s={} generators={}",
-                    path.display(),
+                    load_path.display(),
                     cursor.next_t,
                     cursor.next_s,
                     resolution.generator_count()
                 );
             } else {
-                eprintln!("resuming {} at t={}", path.display(), cursor.next_t);
+                eprintln!("resuming {} at t={}", load_path.display(), cursor.next_t);
             }
         }
         Ok((resolution, cursor))
@@ -598,6 +662,17 @@ fn save_checkpoint_if_enabled(
     verbose: bool,
 ) -> Result<(), String> {
     if let Some(path) = checkpoint_path {
+        if let Some(parent) = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            std::fs::create_dir_all(parent).map_err(|err| {
+                format!(
+                    "failed to create checkpoint directory {}: {err}",
+                    parent.display()
+                )
+            })?;
+        }
         let timer = Instant::now();
         let manifest = sharded_io::write_sharded_checkpoint(
             path,
@@ -1079,54 +1154,73 @@ fn range_cmd(args: &[String]) -> Result<(), String> {
 fn export_cmd(args: &[String]) -> Result<(), String> {
     validate_flags(args, EXPORT_FLAGS)?;
     if has_flag(args, "-h") || has_flag(args, "--help") {
-        println!("usage: nassau_min_res export --checkpoint DIR [--output FILE] [--overwrite]");
+        println!(
+            "usage: nassau_min_res export [--t N] [--checkpoint DIR] [--output FILE] [--overwrite]"
+        );
         println!(
             "Export an existing checkpoint directory to a bidegree rank CSV with columns s,t,rank."
         );
+        println!("By default, --t N reads checkpoint/tN.checkpoint and writes csv_output/tN.csv.");
+        println!("With neither --t nor --checkpoint, the latest default checkpoint is exported.");
         return Ok(());
     }
 
-    let checkpoint_path = parse_string_flag(args, "--checkpoint")?
-        .ok_or_else(|| "export needs --checkpoint DIR for a checkpoint directory".to_string())?;
-    let output_path = parse_string_flag_any(args, &["--output", "--out"])?
-        .unwrap_or_else(|| DEFAULT_EXPORT_PATH.to_string());
-    let overwrite = has_flag(args, "--overwrite");
-    let output = PathBuf::from(&output_path);
-    ensure_output_path_is_free(&output, overwrite)?;
-    let checkpoint = Path::new(&checkpoint_path);
-    if checkpoint.is_dir() {
-        let manifest = sharded_io::read_manifest(checkpoint)?;
-        if manifest.format_name != sharded_io::SHARDED_CHECKPOINT_FORMAT {
-            return Err(format!(
-                "checkpoint directory {} has format `{}`, expected `{}`",
-                checkpoint.display(),
-                manifest.format_name,
-                sharded_io::SHARDED_CHECKPOINT_FORMAT
-            ));
-        }
-        let rows = sharded_io::export_sharded_generators_csv(
-            checkpoint,
-            manifest.completed_internal_degree,
-            &output,
-        )?;
-        println!(
-            "exported {} nonzero bidegree ranks with t <= {} from {} to {}",
-            rows,
-            manifest.completed_internal_degree,
-            checkpoint_path,
-            output.display()
-        );
-        println!(
-            "checkpoint completed full layers t <= {}",
-            manifest.completed_internal_degree
-        );
-        return Ok(());
+    let requested_t = parse_usize_flag(args, "--t")?;
+    let checkpoint = if let Some(path) = parse_string_flag(args, "--checkpoint")? {
+        PathBuf::from(path)
+    } else if let Some(max_t) = requested_t {
+        default_checkpoint_path(max_t)
+    } else {
+        latest_default_checkpoint(usize::MAX)?.ok_or_else(|| {
+            format!(
+                "no default checkpoints found in {}; run compute first or pass --checkpoint DIR",
+                DEFAULT_CHECKPOINT_DIR
+            )
+        })?
+    };
+    if !checkpoint.is_dir() {
+        return Err(format!(
+            "checkpoint {} is not a supported checkpoint directory",
+            checkpoint.display()
+        ));
     }
 
-    Err(format!(
-        "checkpoint {} is not a supported checkpoint directory",
-        checkpoint.display()
-    ))
+    let manifest = sharded_io::read_manifest(&checkpoint)?;
+    if manifest.format_name != sharded_io::SHARDED_CHECKPOINT_FORMAT {
+        return Err(format!(
+            "checkpoint directory {} has format `{}`, expected `{}`",
+            checkpoint.display(),
+            manifest.format_name,
+            sharded_io::SHARDED_CHECKPOINT_FORMAT
+        ));
+    }
+    let export_t = requested_t.unwrap_or(manifest.completed_internal_degree);
+    if export_t > manifest.completed_internal_degree {
+        return Err(format!(
+            "checkpoint {} is complete only through t={}, so it cannot export --t {}",
+            checkpoint.display(),
+            manifest.completed_internal_degree,
+            export_t
+        ));
+    }
+
+    let output = parse_string_flag_any(args, &["--output", "--out"])?
+        .map(PathBuf::from)
+        .unwrap_or_else(|| default_csv_output_path(export_t));
+    ensure_output_path_is_free(&output, has_flag(args, "--overwrite"))?;
+    let rows = sharded_io::export_sharded_generators_csv(&checkpoint, export_t, &output)?;
+    println!(
+        "exported {} nonzero bidegree ranks with t <= {} from {} to {}",
+        rows,
+        export_t,
+        checkpoint.display(),
+        output.display()
+    );
+    println!(
+        "checkpoint completed full layers t <= {}",
+        manifest.completed_internal_degree
+    );
+    Ok(())
 }
 
 fn checkpoint_cmd(args: &[String]) -> Result<(), String> {
@@ -1353,6 +1447,7 @@ const COMPUTE_FLAGS: &[(&str, FlagKind)] = &[
 ];
 
 const EXPORT_FLAGS: &[(&str, FlagKind)] = &[
+    ("--t", FlagKind::Value),
     ("--checkpoint", FlagKind::Value),
     ("--output", FlagKind::Value),
     ("--out", FlagKind::Value),
@@ -1466,7 +1561,7 @@ Commands:
   checkpoint verify --checkpoint DIR
       Verify checkpoint structure and generator references.
 
-  export --checkpoint DIR [--output FILE] [--overwrite]
+  export [--t N] [--checkpoint DIR] [--output FILE] [--overwrite]
       Export one row per nonzero (s,t) to CSV, with columns s,t,rank.
 
   detailed-subalgebras [--output FILE]
@@ -1500,6 +1595,10 @@ Core options:
   --output FILE, --out FILE    Write a human-readable report
   --show-differentials         Include differentials in the report
   --show-steps                 Print individual calculation steps
+
+Default output paths:
+  checkpoint/tN.checkpoint     Checkpoint for a computation through --t N
+                               (automatically resumes the latest earlier one)
 
 Algorithm options:
   --algorithm NAME             fixed-t-batch, auto, nassau, naive, or
@@ -1612,17 +1711,30 @@ mod cli_tests {
     }
 
     #[test]
-    fn default_checkpoint_paths_use_checkpoint_suffix() {
-        let paths = checkpoint_paths_for(&[], None, 100).unwrap();
-        let expected = Some(PathBuf::from("nassau_min_res.checkpoint"));
+    fn default_checkpoint_paths_are_named_by_target_t() {
+        let paths = checkpoint_paths_for(&[], 100).unwrap();
+        let expected = Some(PathBuf::from("checkpoint/t100.checkpoint"));
         assert_eq!(paths.load, expected);
         assert_eq!(paths.save, expected);
+        assert!(paths.auto_discover_load);
 
-        let output = PathBuf::from("runs/resolution_t100.txt");
-        let output_paths = checkpoint_paths_for(&[], Some(&output), 100).unwrap();
-        let expected_output = Some(PathBuf::from("runs/resolution_t100.txt.checkpoint"));
-        assert_eq!(output_paths.load, expected_output);
-        assert_eq!(output_paths.save, expected_output);
+        let explicit = checkpoint_paths_for(
+            &args(&["--checkpoint", "runs/local/resolution.checkpoint"]),
+            100,
+        )
+        .unwrap();
+        let explicit_path = Some(PathBuf::from("runs/local/resolution.checkpoint"));
+        assert_eq!(explicit.load, explicit_path);
+        assert_eq!(explicit.save, explicit_path);
+        assert!(!explicit.auto_discover_load);
+    }
+
+    #[test]
+    fn default_checkpoint_names_encode_t() {
+        assert_eq!(checkpoint_degree_from_name("t0.checkpoint"), Some(0));
+        assert_eq!(checkpoint_degree_from_name("t140.checkpoint"), Some(140));
+        assert_eq!(checkpoint_degree_from_name("resolution.checkpoint"), None);
+        assert_eq!(checkpoint_degree_from_name("t140.csv"), None);
     }
 
     #[test]

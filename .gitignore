@@ -10,6 +10,8 @@ resolution_*.txt
 *.tmp
 
 # Local run products.
+/checkpoint/
+/csv_output/
 /runs/
 /logs/
 /exports/

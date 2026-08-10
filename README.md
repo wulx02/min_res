@@ -39,10 +39,13 @@ maximum of four. Override these choices with `--threads N` or
 
 Console output is concise by default: one progress line per completed `t`
 layer and a short final summary. The completed calculation is saved once, at
-the end, to `nassau_min_res.checkpoint`. A later command automatically resumes
-from that checkpoint when extending the range. Use `--no-checkpoint` for a run
-that should neither load nor save it. Use `--verbose` when detailed startup,
-cache, CPU, memory, checkpoint, and timing diagnostics are needed.
+the end, to `checkpoint/t100.checkpoint` for the example above. The
+`checkpoint` directory is created automatically. A later command with a larger
+`--t` automatically resumes from the latest checkpoint in that directory that
+does not exceed the requested degree, then saves a new `tN.checkpoint`. Use
+`--no-checkpoint` for a run that should neither load nor save a checkpoint. Use
+`--verbose` when detailed startup, cache, CPU, memory, checkpoint, and timing
+diagnostics are needed.
 
 ## Save and resume a calculation
 
@@ -50,10 +53,11 @@ Checkpoints are directories, not single files. A checkpoint contains a
 manifest plus packed generator and differential data:
 
 ```text
-resolution.checkpoint/
-  manifest.json
-  gen_meta.pack
-  diff_terms.pack
+checkpoint/
+  t100.checkpoint/
+    manifest.json
+    gen_meta.pack
+    diff_terms.pack
 ```
 
 Checkpoint updates are written and verified in a temporary sibling directory
@@ -73,13 +77,23 @@ layers. The final checkpoint is always written:
 ```
 
 This saves after every 10 newly completed layers. Use
-`--checkpoint-every-layers 1` to save after every layer.
+`--checkpoint-every-layers 1` to save after every layer. Intermediate saves
+update `checkpoint/t140.checkpoint`, the checkpoint named for the requested
+target.
+
+For example, after completing `--t 100`, extend the calculation with:
+
+```bash
+./target/release/nassau_min_res compute \
+  --t 120
+```
+
+This loads `checkpoint/t100.checkpoint` and saves the extended result as
+`checkpoint/t120.checkpoint`; the `t100` checkpoint remains unchanged.
 
 Use `--checkpoint DIR` to choose a different checkpoint path:
 
 ```bash
-mkdir -p runs/local
-
 ./target/release/nassau_min_res compute \
   --t 100 \
   --checkpoint runs/local/resolution.checkpoint
@@ -110,14 +124,25 @@ Export one row per nonzero `(s, t)` to CSV, with columns `s,t,rank`:
 
 ```bash
 ./target/release/nassau_min_res export \
+  --t 140
+```
+
+This reads `checkpoint/t140.checkpoint` and writes `csv_output/t140.csv`,
+creating `csv_output` automatically. With neither `--t` nor `--checkpoint`,
+`export` uses the latest default checkpoint. Use `--overwrite` to replace an
+existing CSV.
+
+For explicitly named paths:
+
+```bash
+./target/release/nassau_min_res export \
   --checkpoint runs/local/t140.checkpoint \
   --output runs/local/basis_t140.csv
 ```
 
 To write a human-readable generator report directly from a calculation, use
 `--output FILE`. Add `--show-differentials` when the differentials are also
-needed. Pass an explicit `--checkpoint` if you do not want the checkpoint path
-to be derived from the report filename.
+needed. The report path does not change the default checkpoint path.
 
 ```bash
 ./target/release/nassau_min_res compute \
