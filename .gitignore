@@ -3,8 +3,7 @@
 **/.DS_Store
 
 # Generated checkpoints and reports.
-*.sharded/
-nassau_min_res.sharded/
+*.checkpoint/
 .*.tmp-*/
 resolution_*.txt
 *.pack

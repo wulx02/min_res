@@ -43,14 +43,14 @@ jobs:
           grep '^B3221,.*found' detailed-subalgebras.csv
           "$binary" compute --t 12 > compute.stdout 2> compute.stderr
           test "$(grep -Ec '^t=[0-9]+/12 ' compute.stderr)" -eq 12
-          grep -qx 'saved checkpoint nassau_min_res.sharded' compute.stderr
+          grep -qx 'saved checkpoint nassau_min_res.checkpoint' compute.stderr
           grep -q '^computed t <= 12, s <= 12, generators=' compute.stdout
           if grep -q '^fixed_t_' compute.stderr; then
             cat compute.stderr
             exit 1
           fi
-          "$binary" checkpoint verify-sharded \
-            --checkpoint "$smoke_dir/nassau_min_res.sharded"
+          "$binary" checkpoint verify \
+            --checkpoint "$smoke_dir/nassau_min_res.checkpoint"
           "$binary" export \
-            --checkpoint "$smoke_dir/nassau_min_res.sharded" \
+            --checkpoint "$smoke_dir/nassau_min_res.checkpoint" \
             --output "$smoke_dir/basis_t12.csv"

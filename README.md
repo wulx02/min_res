@@ -39,7 +39,7 @@ maximum of four. Override these choices with `--threads N` or
 
 Console output is concise by default: one progress line per completed `t`
 layer and a short final summary. The completed calculation is saved once, at
-the end, to `nassau_min_res.sharded`. A later command automatically resumes
+the end, to `nassau_min_res.checkpoint`. A later command automatically resumes
 from that checkpoint when extending the range. Use `--no-checkpoint` for a run
 that should neither load nor save it. Use `--verbose` when detailed startup,
 cache, CPU, memory, checkpoint, and timing diagnostics are needed.
@@ -50,7 +50,7 @@ Checkpoints are directories, not single files. A checkpoint contains a
 manifest plus packed generator and differential data:
 
 ```text
-resolution.sharded/
+resolution.checkpoint/
   manifest.json
   gen_meta.pack
   diff_terms.pack
@@ -59,7 +59,7 @@ resolution.sharded/
 Checkpoint updates are written and verified in a temporary sibling directory
 before the destination is atomically exchanged on macOS or Linux. The old tree
 is then removed rather than retained as a backup. For safety, the program
-refuses to replace a directory unless it is a valid `NMR_SHARDED_V1` checkpoint
+refuses to replace a directory unless it is a valid checkpoint
 containing only the three files shown above.
 
 The default command saves only after the complete requested range succeeds.
@@ -82,7 +82,7 @@ mkdir -p runs/local
 
 ./target/release/nassau_min_res compute \
   --t 100 \
-  --checkpoint runs/local/resolution.sharded
+  --checkpoint runs/local/resolution.checkpoint
 ```
 
 The same path can then be resumed to a larger degree:
@@ -90,7 +90,7 @@ The same path can then be resumed to a larger degree:
 ```bash
 ./target/release/nassau_min_res compute \
   --t 120 \
-  --checkpoint runs/local/resolution.sharded
+  --checkpoint runs/local/resolution.checkpoint
 ```
 
 Use `--fresh` to ignore an existing checkpoint and recompute from the
@@ -100,8 +100,8 @@ output paths:
 ```bash
 ./target/release/nassau_min_res compute \
   --t 140 \
-  --load-checkpoint runs/local/resolution.sharded \
-  --save-checkpoint runs/local/t140.sharded
+  --load-checkpoint runs/local/resolution.checkpoint \
+  --save-checkpoint runs/local/t140.checkpoint
 ```
 
 ## Export results
@@ -110,7 +110,7 @@ Export one row per nonzero `(s, t)` to CSV, with columns `s,t,rank`:
 
 ```bash
 ./target/release/nassau_min_res export \
-  --checkpoint runs/local/t140.sharded \
+  --checkpoint runs/local/t140.checkpoint \
   --output runs/local/basis_t140.csv
 ```
 
@@ -122,7 +122,7 @@ to be derived from the report filename.
 ```bash
 ./target/release/nassau_min_res compute \
   --t 120 \
-  --checkpoint runs/local/t120.sharded \
+  --checkpoint runs/local/t120.checkpoint \
   --output runs/local/resolution_t120.txt
 ```
 

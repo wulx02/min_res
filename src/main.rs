@@ -23,7 +23,7 @@ use subalgebra::{
 };
 
 const DEFAULT_EXPORT_PATH: &str = "exports/current_basis.csv";
-const DEFAULT_SHARDED_CHECKPOINT_PATH: &str = "nassau_min_res.sharded";
+const DEFAULT_CHECKPOINT_PATH: &str = "nassau_min_res.checkpoint";
 const DEFAULT_CACHE_WINDOW_T: usize = 8;
 const MAX_DEFAULT_FIXED_T_BATCH_WORKERS: usize = 4;
 const FULL_NAIVE_BATCH_DIAGNOSTIC_MAX_T: usize = 64;
@@ -393,8 +393,8 @@ fn checkpoint_paths_for(
         );
     }
     let default_checkpoint = output
-        .map(|path| default_sharded_checkpoint_path(path.as_path()))
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SHARDED_CHECKPOINT_PATH));
+        .map(|path| default_checkpoint_path(path.as_path()))
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CHECKPOINT_PATH));
 
     let explicit_load = load_checkpoint.is_some();
     let load_required = explicit_load;
@@ -404,7 +404,7 @@ fn checkpoint_paths_for(
     let save = save_checkpoint
         .or_else(|| legacy_checkpoint.clone())
         .or_else(|| {
-            explicit_load.then(|| PathBuf::from(format!("nassau_min_res_t{max_t}.sharded")))
+            explicit_load.then(|| PathBuf::from(format!("nassau_min_res_t{max_t}.checkpoint")))
         })
         .or_else(|| Some(default_checkpoint.clone()));
 
@@ -415,9 +415,9 @@ fn checkpoint_paths_for(
     })
 }
 
-fn default_sharded_checkpoint_path(output: &Path) -> PathBuf {
+fn default_checkpoint_path(output: &Path) -> PathBuf {
     let mut path = output.as_os_str().to_os_string();
-    path.push(".sharded");
+    path.push(".checkpoint");
     PathBuf::from(path)
 }
 
@@ -566,10 +566,7 @@ fn load_sharded_checkpoint_for_compute(
     max_t: usize,
 ) -> Result<(Resolution, ComputeCursor), String> {
     if !path.is_dir() {
-        return Err(format!(
-            "checkpoint {} is not a directory; local checkpoints are sharded NMR_SHARDED_V1 directories",
-            path.display()
-        ));
+        return Err(format!("checkpoint {} is not a directory", path.display()));
     }
     let manifest = sharded_io::read_manifest(path)?;
     if manifest.format_name != sharded_io::SHARDED_CHECKPOINT_FORMAT {
@@ -1084,14 +1081,13 @@ fn export_cmd(args: &[String]) -> Result<(), String> {
     if has_flag(args, "-h") || has_flag(args, "--help") {
         println!("usage: nassau_min_res export --checkpoint DIR [--output FILE] [--overwrite]");
         println!(
-            "Export an existing NMR_SHARDED_V1 directory to a bidegree rank CSV with columns s,t,rank."
+            "Export an existing checkpoint directory to a bidegree rank CSV with columns s,t,rank."
         );
         return Ok(());
     }
 
-    let checkpoint_path = parse_string_flag(args, "--checkpoint")?.ok_or_else(|| {
-        "export needs --checkpoint DIR for an NMR_SHARDED_V1 directory".to_string()
-    })?;
+    let checkpoint_path = parse_string_flag(args, "--checkpoint")?
+        .ok_or_else(|| "export needs --checkpoint DIR for a checkpoint directory".to_string())?;
     let output_path = parse_string_flag_any(args, &["--output", "--out"])?
         .unwrap_or_else(|| DEFAULT_EXPORT_PATH.to_string());
     let overwrite = has_flag(args, "--overwrite");
@@ -1128,35 +1124,33 @@ fn export_cmd(args: &[String]) -> Result<(), String> {
     }
 
     Err(format!(
-        "checkpoint {} is not an NMR_SHARDED_V1 directory; v4 checkpoint export was removed",
+        "checkpoint {} is not a supported checkpoint directory",
         checkpoint.display()
     ))
 }
 
 fn checkpoint_cmd(args: &[String]) -> Result<(), String> {
     if args.is_empty() || has_flag(args, "-h") || has_flag(args, "--help") {
-        println!("usage: nassau_min_res checkpoint <init-sharded|verify-sharded> ...");
-        println!("  init-sharded --out DIR [--overwrite]");
-        println!("  verify-sharded --checkpoint DIR");
+        println!("usage: nassau_min_res checkpoint <init|verify> ...");
+        println!("  init --out DIR [--overwrite]");
+        println!("  verify --checkpoint DIR");
         return Ok(());
     }
     let subcmd = args[0].as_str();
     let rest = &args[1..];
     match subcmd {
-        "init-sharded" | "init_sharded" | "seed-sharded" | "seed_sharded" => {
-            checkpoint_init_sharded_cmd(rest)
-        }
-        "verify-sharded" | "verify_sharded" => checkpoint_verify_sharded_cmd(rest),
+        "init" => checkpoint_init_cmd(rest),
+        "verify" => checkpoint_verify_cmd(rest),
         _ => Err(format!(
-            "unknown checkpoint subcommand `{subcmd}`; expected init-sharded or verify-sharded"
+            "unknown checkpoint subcommand `{subcmd}`; expected init or verify"
         )),
     }
 }
 
-fn checkpoint_init_sharded_cmd(args: &[String]) -> Result<(), String> {
+fn checkpoint_init_cmd(args: &[String]) -> Result<(), String> {
     validate_flags(args, CHECKPOINT_INIT_FLAGS)?;
     let out = parse_string_flag_any(args, &["--out", "--output"])?
-        .ok_or_else(|| "checkpoint init-sharded needs --out DIR".to_string())?;
+        .ok_or_else(|| "checkpoint init needs --out DIR".to_string())?;
     let overwrite = has_flag(args, "--overwrite");
     let resolution = Resolution::new(0);
     let manifest = sharded_io::write_sharded_checkpoint(
@@ -1168,7 +1162,7 @@ fn checkpoint_init_sharded_cmd(args: &[String]) -> Result<(), String> {
         overwrite,
     )?;
     let report = sharded_io::verify_sharded_checkpoint(Path::new(&out))?;
-    println!("sharded_checkpoint_written={out}");
+    println!("checkpoint_written={out}");
     println!("format={}", manifest.format_name);
     println!(
         "completed_internal_degree={}",
@@ -1183,10 +1177,10 @@ fn checkpoint_init_sharded_cmd(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-fn checkpoint_verify_sharded_cmd(args: &[String]) -> Result<(), String> {
+fn checkpoint_verify_cmd(args: &[String]) -> Result<(), String> {
     validate_flags(args, CHECKPOINT_VERIFY_FLAGS)?;
     let checkpoint = parse_string_flag_any(args, &["--checkpoint", "--input"])?
-        .ok_or_else(|| "checkpoint verify-sharded needs --checkpoint DIR".to_string())?;
+        .ok_or_else(|| "checkpoint verify needs --checkpoint DIR".to_string())?;
     let dir = Path::new(&checkpoint);
     let report = sharded_io::verify_sharded_checkpoint(dir)?;
     println!("checkpoint={}", dir.display());
@@ -1466,10 +1460,10 @@ Commands:
       uses automatic finite-subalgebra selection. Run `compute --help` for all
       compute options.
 
-  checkpoint init-sharded --out DIR [--overwrite]
-      Create a seed NMR_SHARDED_V1 checkpoint.
+  checkpoint init --out DIR [--overwrite]
+      Create a seed checkpoint.
 
-  checkpoint verify-sharded --checkpoint DIR
+  checkpoint verify --checkpoint DIR
       Verify checkpoint structure and generator references.
 
   export --checkpoint DIR [--output FILE] [--overwrite]
@@ -1615,6 +1609,20 @@ mod cli_tests {
             checkpoint_schedule_for(&[]).unwrap(),
             CheckpointSchedule::FinalOnly
         ));
+    }
+
+    #[test]
+    fn default_checkpoint_paths_use_checkpoint_suffix() {
+        let paths = checkpoint_paths_for(&[], None, 100).unwrap();
+        let expected = Some(PathBuf::from("nassau_min_res.checkpoint"));
+        assert_eq!(paths.load, expected);
+        assert_eq!(paths.save, expected);
+
+        let output = PathBuf::from("runs/resolution_t100.txt");
+        let output_paths = checkpoint_paths_for(&[], Some(&output), 100).unwrap();
+        let expected_output = Some(PathBuf::from("runs/resolution_t100.txt.checkpoint"));
+        assert_eq!(output_paths.load, expected_output);
+        assert_eq!(output_paths.save, expected_output);
     }
 
     #[test]
