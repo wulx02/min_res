@@ -106,8 +106,8 @@ const DETAILED_FINITE_SUBALGEBRAS: &[DetailedFiniteSubalgebraSpec] = &[
         profile: &[3, 2, 1],
         dim: 64,
         tau: 23,
-        bitset_env: "NASSAU_A2_EXT_BITSET",
-        metadata_env: "NASSAU_A2_EXT_METADATA",
+        bitset_env: "EXT_A2_EXT_BITSET",
+        metadata_env: "EXT_A2_EXT_METADATA",
         default_bitset_path: A2_DETAILED_DEFAULT_PATH,
         default_metadata_path: "detailed_subalgebra/Ext_A2_support_0_512.json",
         embedded_bitset: Some(A2_DETAILED_EMBEDDED_BITSET),
@@ -118,8 +118,8 @@ const DETAILED_FINITE_SUBALGEBRAS: &[DetailedFiniteSubalgebraSpec] = &[
         profile: &[3, 2, 1, 1],
         dim: 128,
         tau: 38,
-        bitset_env: "NASSAU_B3211_EXT_BITSET",
-        metadata_env: "NASSAU_B3211_EXT_METADATA",
+        bitset_env: "EXT_B3211_EXT_BITSET",
+        metadata_env: "EXT_B3211_EXT_METADATA",
         default_bitset_path: "detailed_subalgebra/B3211_support_s0-512_t0-512.bin",
         default_metadata_path: "detailed_subalgebra/B3211_support_s0-512_t0-512.json",
         embedded_bitset: Some(B3211_DETAILED_EMBEDDED_BITSET),
@@ -130,8 +130,8 @@ const DETAILED_FINITE_SUBALGEBRAS: &[DetailedFiniteSubalgebraSpec] = &[
         profile: &[3, 2, 2, 1],
         dim: 256,
         tau: 52,
-        bitset_env: "NASSAU_B3221_EXT_BITSET",
-        metadata_env: "NASSAU_B3221_EXT_METADATA",
+        bitset_env: "EXT_B3221_EXT_BITSET",
+        metadata_env: "EXT_B3221_EXT_METADATA",
         default_bitset_path: "detailed_subalgebra/B3221_support_s0-512_t0-512.bin",
         default_metadata_path: "detailed_subalgebra/B3221_support_s0-512_t0-512.json",
         embedded_bitset: Some(B3221_DETAILED_EMBEDDED_BITSET),
@@ -142,8 +142,8 @@ const DETAILED_FINITE_SUBALGEBRAS: &[DetailedFiniteSubalgebraSpec] = &[
         profile: &[3, 3, 2, 1],
         dim: 512,
         tau: 64,
-        bitset_env: "NASSAU_B3321_EXT_BITSET",
-        metadata_env: "NASSAU_B3321_EXT_METADATA",
+        bitset_env: "EXT_B3321_EXT_BITSET",
+        metadata_env: "EXT_B3321_EXT_METADATA",
         default_bitset_path: "detailed_subalgebra/B3321_support_s0-512_t0-512.bin",
         default_metadata_path: "detailed_subalgebra/B3321_support_s0-512_t0-512.json",
         embedded_bitset: None,
@@ -154,8 +154,8 @@ const DETAILED_FINITE_SUBALGEBRAS: &[DetailedFiniteSubalgebraSpec] = &[
         profile: &[4, 3, 2, 1],
         dim: 1024,
         tau: 72,
-        bitset_env: "NASSAU_A3_EXT_BITSET",
-        metadata_env: "NASSAU_A3_EXT_METADATA",
+        bitset_env: "EXT_A3_EXT_BITSET",
+        metadata_env: "EXT_A3_EXT_METADATA",
         default_bitset_path: "detailed_subalgebra/A3_support_s0-512_t0-512.bin",
         default_metadata_path: "detailed_subalgebra/A3_support_s0-512_t0-512.json",
         embedded_bitset: None,
@@ -909,7 +909,7 @@ impl Subalgebra {
 
 fn a2_condition_mode() -> A2ConditionMode {
     *A2_CONDITION_MODE.get_or_init(|| {
-        match env::var("NASSAU_A2_CONDITION")
+        match env::var("EXT_A2_CONDITION")
             .unwrap_or_default()
             .to_ascii_lowercase()
             .as_str()
@@ -920,7 +920,7 @@ fn a2_condition_mode() -> A2ConditionMode {
             "theorem" | "old" => A2ConditionMode::Theorem,
             "paper23" | "paper" | "german" | "t>7s+23" => A2ConditionMode::Paper23,
             other => {
-                panic!("invalid NASSAU_A2_CONDITION={other:?}; use theorem, paper23, or detailed")
+                panic!("invalid EXT_A2_CONDITION={other:?}; use theorem, paper23, or detailed")
             }
         }
     })
@@ -928,7 +928,7 @@ fn a2_condition_mode() -> A2ConditionMode {
 
 fn a3_condition_mode() -> A3ConditionMode {
     *A3_CONDITION_MODE.get_or_init(|| {
-        match env::var("NASSAU_A3_CONDITION")
+        match env::var("EXT_A3_CONDITION")
             .unwrap_or_default()
             .to_ascii_lowercase()
             .as_str()
@@ -937,7 +937,7 @@ fn a3_condition_mode() -> A3ConditionMode {
                 A3ConditionMode::Paper72
             }
             "theorem" | "old" => A3ConditionMode::Theorem,
-            other => panic!("invalid NASSAU_A3_CONDITION={other:?}; use theorem or paper72"),
+            other => panic!("invalid EXT_A3_CONDITION={other:?}; use theorem or paper72"),
         }
     })
 }
@@ -1417,7 +1417,7 @@ impl DetailedExtTable {
 
 fn a2_detailed_support() -> &'static [u8] {
     A2_DETAILED_SUPPORT.get_or_init(|| {
-        let data = match env::var("NASSAU_A2_EXT_BITSET") {
+        let data = match env::var("EXT_A2_EXT_BITSET") {
             Ok(path) => fs::read(&path).unwrap_or_else(|err| {
                 panic!("failed to read A2 detailed support bitset {path}: {err}")
             }),

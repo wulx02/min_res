@@ -1,6 +1,6 @@
-# nassau_min_res
+# ext
 
-`nassau_min_res` is research software for computing a minimal
+`ext` is research software that uses the Nassau algorithm to compute a minimal
 free resolution of the trivial module `F2` over the mod-2 Steenrod algebra.
 Coefficients are represented in the Milnor basis.
 
@@ -15,7 +15,7 @@ cargo build --release --locked
 The executable is:
 
 ```text
-target/release/nassau_min_res
+target/release/ext
 ```
 
 ## Quick start
@@ -23,7 +23,7 @@ target/release/nassau_min_res
 Start a calculation:
 
 ```bash
-./target/release/nassau_min_res compute \
+./target/release/ext compute \
   --t 100
 ```
 
@@ -71,7 +71,7 @@ To save intermediate progress as well, specify a number of completed `t`
 layers. The final checkpoint is always written:
 
 ```bash
-./target/release/nassau_min_res compute \
+./target/release/ext compute \
   --t 140 \
   --checkpoint-every-layers 10
 ```
@@ -88,7 +88,7 @@ and explicitly named checkpoint paths continue to be updated in place.
 For example, after completing `--t 100`, extend the calculation with:
 
 ```bash
-./target/release/nassau_min_res compute \
+./target/release/ext compute \
   --t 120
 ```
 
@@ -98,7 +98,7 @@ This loads `checkpoint/t100.checkpoint` and saves the extended result as
 Use `--checkpoint DIR` to choose a different checkpoint path:
 
 ```bash
-./target/release/nassau_min_res compute \
+./target/release/ext compute \
   --t 100 \
   --checkpoint runs/local/resolution.checkpoint
 ```
@@ -106,7 +106,7 @@ Use `--checkpoint DIR` to choose a different checkpoint path:
 The same path can then be resumed to a larger degree:
 
 ```bash
-./target/release/nassau_min_res compute \
+./target/release/ext compute \
   --t 120 \
   --checkpoint runs/local/resolution.checkpoint
 ```
@@ -116,7 +116,7 @@ beginning. When extending or testing a calculation, prefer different input and
 output paths:
 
 ```bash
-./target/release/nassau_min_res compute \
+./target/release/ext compute \
   --t 140 \
   --load-checkpoint runs/local/resolution.checkpoint \
   --save-checkpoint runs/local/t140.checkpoint
@@ -127,7 +127,7 @@ output paths:
 Export one row per nonzero `(s, t)` to CSV, with columns `s,t,rank`:
 
 ```bash
-./target/release/nassau_min_res export \
+./target/release/ext export \
   --t 140
 ```
 
@@ -139,7 +139,7 @@ existing CSV.
 For explicitly named paths:
 
 ```bash
-./target/release/nassau_min_res export \
+./target/release/ext export \
   --checkpoint runs/local/t140.checkpoint \
   --output runs/local/basis_t140.csv
 ```
@@ -149,7 +149,7 @@ To write a human-readable generator report directly from a calculation, use
 needed. The report path does not change the default checkpoint path.
 
 ```bash
-./target/release/nassau_min_res compute \
+./target/release/ext compute \
   --t 120 \
   --checkpoint runs/local/t120.checkpoint \
   --output runs/local/resolution_t120.txt

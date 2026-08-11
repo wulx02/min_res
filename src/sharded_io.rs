@@ -1130,7 +1130,7 @@ mod tests {
 
     fn fresh_test_root(label: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "nassau_{label}_{}_{}",
+            "ext_{label}_{}_{}",
             std::process::id(),
             TEMP_CHECKPOINT_COUNTER.fetch_add(1, AtomicOrdering::Relaxed)
         ));
@@ -1308,7 +1308,7 @@ mod tests {
     #[test]
     fn export_generators_csv_only_needs_manifest_and_gen_meta() {
         let root = std::env::temp_dir().join(format!(
-            "nassau_sharded_gen_meta_export_{}",
+            "ext_sharded_gen_meta_export_{}",
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&root);
@@ -1342,7 +1342,7 @@ mod tests {
     #[test]
     fn read_range_rejects_out_of_bounds_before_allocating() {
         let root = std::env::temp_dir().join(format!(
-            "nassau_sharded_read_range_guard_{}",
+            "ext_sharded_read_range_guard_{}",
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&root);
@@ -1361,10 +1361,8 @@ mod tests {
 
     #[test]
     fn manifest_storage_rejects_inconsistent_q_block_lengths() {
-        let root = std::env::temp_dir().join(format!(
-            "nassau_sharded_manifest_guard_{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("ext_sharded_manifest_guard_{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         fs::write(root.join(GEN_META_FILE), vec![0_u8; GEN_META_RECORD_BYTES]).unwrap();

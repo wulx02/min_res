@@ -225,7 +225,7 @@ fn compute_cmd(args: &[String]) -> Result<(), String> {
     }
     if verbose {
         eprintln!(
-            "timing nassau_min_res compute_s={compute_s:.6} total_s={:.6}",
+            "timing ext compute_s={compute_s:.6} total_s={:.6}",
             total_timer.elapsed().as_secs_f64()
         );
     } else {
@@ -238,7 +238,7 @@ fn build_compute_mode(args: &[String], max_t: usize) -> Result<ComputeMode, Stri
     let algorithm =
         parse_string_flag(args, "--algorithm")?.unwrap_or_else(|| "fixed-t-batch".to_string());
     match algorithm.as_str() {
-        "auto" | "sequential" | "nassau-auto" | "algorithm2-auto" | "alg2-auto" => {
+        "auto" | "sequential" | "algorithm2-auto" | "alg2-auto" => {
             let subalgebras = parse_subalgebra_list(args, max_t)?;
             let strict = has_flag(args, "--strict");
             let force = has_flag(args, "--force");
@@ -286,7 +286,7 @@ fn build_compute_mode(args: &[String], max_t: usize) -> Result<ComputeMode, Stri
                 inner: Box::new(inner),
             })
         }
-        "nassau" | "algorithm2" | "alg2" => {
+        "accelerated" | "algorithm2" | "alg2" => {
             let subalgebra = parse_string_flag(args, "--subalgebra")?
                 .ok_or_else(|| {
                     "Algorithm 2 needs an explicit --subalgebra A0/A1/A2/...".to_string()
@@ -294,7 +294,7 @@ fn build_compute_mode(args: &[String], max_t: usize) -> Result<ComputeMode, Stri
                 .and_then(|name| Subalgebra::parse(&name, max_t))?;
             let strict = has_flag(args, "--strict");
             let force = has_flag(args, "--force");
-            Ok(ComputeMode::Nassau {
+            Ok(ComputeMode::Accelerated {
                 subalgebra,
                 strict,
                 force,
@@ -302,7 +302,7 @@ fn build_compute_mode(args: &[String], max_t: usize) -> Result<ComputeMode, Stri
         }
         "naive" | "algorithm1" | "alg1" => Ok(ComputeMode::Naive),
         _ => Err(
-            "--algorithm must be sequential, auto, nassau, naive, fixed-t-batch, or fixed-t-batch-shadow"
+            "--algorithm must be sequential, auto, accelerated, naive, fixed-t-batch, or fixed-t-batch-shadow"
                 .into(),
         ),
     }
@@ -319,7 +319,7 @@ fn default_fixed_t_batch_workers_for_threads(rayon_threads: usize) -> usize {
 fn build_fixed_t_batch_inner_mode(args: &[String], max_t: usize) -> Result<ComputeMode, String> {
     let inner = parse_string_flag(args, "--batch-inner")?.unwrap_or_else(|| "auto".to_string());
     match inner.as_str() {
-        "auto" | "sequential" | "nassau-auto" | "algorithm2-auto" | "alg2-auto" => {
+        "auto" | "sequential" | "algorithm2-auto" | "alg2-auto" => {
             let subalgebras = parse_subalgebra_list(args, max_t)?;
             let force = has_flag(args, "--force");
             let bounded_naive_fallback =
@@ -335,15 +335,16 @@ fn build_fixed_t_batch_inner_mode(args: &[String], max_t: usize) -> Result<Compu
             };
             Ok(mode)
         }
-        "nassau" | "algorithm2" | "alg2" => {
+        "accelerated" | "algorithm2" | "alg2" => {
             let subalgebra = parse_string_flag(args, "--subalgebra")?
                 .ok_or_else(|| {
-                    "fixed-t-batch --batch-inner nassau needs --subalgebra A0/A1/A2/...".to_string()
+                    "fixed-t-batch --batch-inner accelerated needs --subalgebra A0/A1/A2/..."
+                        .to_string()
                 })
                 .and_then(|name| Subalgebra::parse(&name, max_t))?;
             let strict = has_flag(args, "--strict") || max_t > FULL_NAIVE_BATCH_DIAGNOSTIC_MAX_T;
             let force = has_flag(args, "--force");
-            Ok(ComputeMode::Nassau {
+            Ok(ComputeMode::Accelerated {
                 subalgebra,
                 strict,
                 force,
@@ -358,13 +359,13 @@ fn build_fixed_t_batch_inner_mode(args: &[String], max_t: usize) -> Result<Compu
             }
             if max_t > FULL_NAIVE_BATCH_DIAGNOSTIC_MAX_T {
                 return Err(format!(
-                    "--batch-inner naive is full frozen homology and is blocked for t > {FULL_NAIVE_BATCH_DIAGNOSTIC_MAX_T}; fixed-t batch experiments must use Nassau/signature reduction via --batch-inner auto or nassau."
+                    "--batch-inner naive is full frozen homology and is blocked for t > {FULL_NAIVE_BATCH_DIAGNOSTIC_MAX_T}; fixed-t batch experiments must use Algorithm 2/signature reduction via --batch-inner auto or accelerated."
                 ));
             }
             Ok(ComputeMode::Naive)
         }
         _ => Err(format!(
-            "--batch-inner must be auto, nassau, or naive, got `{inner}`"
+            "--batch-inner must be auto, accelerated, or naive, got `{inner}`"
         )),
     }
 }
@@ -501,7 +502,7 @@ fn checkpoint_display(path: Option<&PathBuf>) -> String {
 fn print_checkpoint_paths(load_path: Option<&PathBuf>, save_path: Option<&PathBuf>) {
     if load_path != save_path {
         eprintln!(
-            "checkpoint nassau_min_res paths load_checkpoint={} save_checkpoint={}",
+            "checkpoint ext paths load_checkpoint={} save_checkpoint={}",
             checkpoint_display(load_path),
             checkpoint_display(save_path),
         );
@@ -528,7 +529,7 @@ fn print_startup_info(
         .map(|path| path.display().to_string())
         .unwrap_or_else(|| ".".to_string());
     eprintln!(
-        "startup nassau_min_res package={} version={} git_commit={} cwd={} argv={:?}",
+        "startup ext package={} version={} git_commit={} cwd={} argv={:?}",
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
         option_env!("GIT_COMMIT").unwrap_or("unknown"),
@@ -536,7 +537,7 @@ fn print_startup_info(
         argv,
     );
     eprintln!(
-        "startup nassau_min_res max_t={} max_s={} output={} output_dir={} load_checkpoint={} save_checkpoint={} rayon_threads={} env_RAYON_NUM_THREADS={} env_NASSAU_FULL_DIFFERENTIAL_CHUNK_MB={}",
+        "startup ext max_t={} max_s={} output={} output_dir={} load_checkpoint={} save_checkpoint={} rayon_threads={} env_RAYON_NUM_THREADS={} env_EXT_FULL_DIFFERENTIAL_CHUNK_MB={}",
         max_t,
         max_t,
         output_path,
@@ -545,7 +546,7 @@ fn print_startup_info(
         checkpoint_display(save_checkpoint),
         rayon_threads,
         env_value("RAYON_NUM_THREADS"),
-        env_value("NASSAU_FULL_DIFFERENTIAL_CHUNK_MB"),
+        env_value("EXT_FULL_DIFFERENTIAL_CHUNK_MB"),
     );
 }
 
@@ -569,9 +570,7 @@ fn load_or_start(
 ) -> Result<(Resolution, ComputeCursor), String> {
     let Some(path) = checkpoint_path else {
         if verbose {
-            eprintln!(
-                "checkpoint nassau_min_res start=fresh checkpoint=none reason=no_checkpoint_path"
-            );
+            eprintln!("checkpoint ext start=fresh checkpoint=none reason=no_checkpoint_path");
         }
         return Ok((Resolution::new(max_t), ComputeCursor::start()));
     };
@@ -579,7 +578,7 @@ fn load_or_start(
     if fresh {
         if verbose {
             eprintln!(
-                "checkpoint nassau_min_res start=fresh checkpoint={} reason=fresh_requested",
+                "checkpoint ext start=fresh checkpoint={} reason=fresh_requested",
                 path.display()
             );
         }
@@ -599,7 +598,7 @@ fn load_or_start(
         if cursor.is_complete_for(max_t) {
             if verbose {
                 eprintln!(
-                    "checkpoint nassau_min_res start=complete checkpoint={} next_t={} next_s={} generators={}",
+                    "checkpoint ext start=complete checkpoint={} next_t={} next_s={} generators={}",
                     load_path.display(),
                     cursor.next_t,
                     cursor.next_s,
@@ -615,7 +614,7 @@ fn load_or_start(
         } else {
             if verbose {
                 eprintln!(
-                    "checkpoint nassau_min_res start=resume checkpoint={} next_t={} next_s={} generators={}",
+                    "checkpoint ext start=resume checkpoint={} next_t={} next_s={} generators={}",
                     load_path.display(),
                     cursor.next_t,
                     cursor.next_s,
@@ -634,7 +633,7 @@ fn load_or_start(
     } else {
         if verbose {
             eprintln!(
-                "checkpoint nassau_min_res start=fresh checkpoint={} reason=no_checkpoint",
+                "checkpoint ext start=fresh checkpoint={} reason=no_checkpoint",
                 path.display()
             );
         }
@@ -719,7 +718,7 @@ fn save_checkpoint_for_cursor(
             .unwrap_or(0.0);
         if verbose {
             eprintln!(
-                "checkpoint nassau_min_res saved checkpoint={} format={} elapsed_s={:.3} size_mb={:.1} next_t={} next_s={}",
+                "checkpoint ext saved checkpoint={} format={} elapsed_s={:.3} size_mb={:.1} next_t={} next_s={}",
                 path.display(),
                 manifest.format_name,
                 timer.elapsed().as_secs_f64(),
@@ -744,7 +743,7 @@ fn save_checkpoint_for_cursor(
                 })?;
                 if verbose {
                     eprintln!(
-                        "checkpoint nassau_min_res removed_superseded checkpoint={}",
+                        "checkpoint ext removed_superseded checkpoint={}",
                         previous.display()
                     );
                 }
@@ -774,7 +773,7 @@ fn print_cache_settings(
         .unwrap_or_else(|| "disabled".to_string());
     let allocator_relief = if allocator_relief { "on" } else { "off" };
     eprintln!(
-        "cache nassau_min_res invalidation=precise solver_cache=true step_solver_cache=true full_basis_lookup_cache=true algebra_basis_index_cache=true full_differential=chunked cache_pruning={} e0_cache_scope={} e0_empty_cache={} signature_matrix_cache={} allocator_relief={}",
+        "cache ext invalidation=precise solver_cache=true step_solver_cache=true full_basis_lookup_cache=true algebra_basis_index_cache=true full_differential=chunked cache_pruning={} e0_cache_scope={} e0_empty_cache={} signature_matrix_cache={} allocator_relief={}",
         prune,
         e0_cache_scope.as_str(),
         e0_empty_cache.as_str(),
@@ -957,7 +956,7 @@ fn configure_rayon_threads(args: &[String]) -> Result<(), String> {
         .num_threads(threads)
         .build_global()
         .map_err(|e| format!("failed to configure Rayon thread pool: {e}"))?;
-    eprintln!("parallel nassau_min_res threads={threads}");
+    eprintln!("parallel ext threads={threads}");
     Ok(())
 }
 
@@ -1034,7 +1033,7 @@ fn print_layer_status(
         .map(format_memory_status_fields)
         .unwrap_or_default();
     eprintln!(
-        "status nassau_min_res completed_t={} completed_task_s={} layer_s={:.3}{} elapsed_s={:.3} max_t={} max_s={} generators={}{}",
+        "status ext completed_t={} completed_task_s={} layer_s={:.3}{} elapsed_s={:.3} max_t={} max_s={} generators={}{}",
         progress.t,
         progress.s,
         layer_elapsed.as_secs_f64(),
@@ -1100,14 +1099,12 @@ fn configure_subalgebra_selection(args: &[String]) -> Result<(), String> {
 
 fn multiply_cmd(args: &[String]) -> Result<(), String> {
     if has_flag(args, "-h") || has_flag(args, "--help") {
-        println!("usage: nassau_min_res multiply R S");
+        println!("usage: ext multiply R S");
         return Ok(());
     }
     validate_no_flags(args)?;
     if args.len() != 2 {
-        return Err(
-            "usage: nassau_min_res multiply R S, e.g. multiply 2 1 or multiply 3,1 1".into(),
-        );
+        return Err("usage: ext multiply R S, e.g. multiply 2 1 or multiply 3,1 1".into());
     }
     let left = Milnor::parse(&args[0])?;
     let right = Milnor::parse(&args[1])?;
@@ -1128,7 +1125,7 @@ fn multiply_cmd(args: &[String]) -> Result<(), String> {
 fn basis_cmd(args: &[String]) -> Result<(), String> {
     validate_flags(args, BASIS_FLAGS)?;
     if has_flag(args, "-h") || has_flag(args, "--help") {
-        println!("usage: nassau_min_res basis --degree N");
+        println!("usage: ext basis --degree N");
         return Ok(());
     }
     let degree =
@@ -1147,9 +1144,7 @@ fn basis_cmd(args: &[String]) -> Result<(), String> {
 fn range_cmd(args: &[String]) -> Result<(), String> {
     validate_flags(args, RANGE_FLAGS)?;
     if has_flag(args, "-h") || has_flag(args, "--help") {
-        println!(
-            "usage: nassau_min_res range --s S (--t T | --stem N) --family A|F|Fprime --n N [--tau TAU]"
-        );
+        println!("usage: ext range --s S (--t T | --stem N) --family A|F|Fprime --n N [--tau TAU]");
         return Ok(());
     }
     let s = parse_usize_flag(args, "--s")?.ok_or_else(|| "range needs --s S".to_string())?;
@@ -1207,9 +1202,7 @@ fn range_cmd(args: &[String]) -> Result<(), String> {
 fn export_cmd(args: &[String]) -> Result<(), String> {
     validate_flags(args, EXPORT_FLAGS)?;
     if has_flag(args, "-h") || has_flag(args, "--help") {
-        println!(
-            "usage: nassau_min_res export [--t N] [--checkpoint DIR] [--output FILE] [--overwrite]"
-        );
+        println!("usage: ext export [--t N] [--checkpoint DIR] [--output FILE] [--overwrite]");
         println!(
             "Export an existing checkpoint directory to a bidegree rank CSV with columns s,t,rank."
         );
@@ -1278,7 +1271,7 @@ fn export_cmd(args: &[String]) -> Result<(), String> {
 
 fn checkpoint_cmd(args: &[String]) -> Result<(), String> {
     if args.is_empty() || has_flag(args, "-h") || has_flag(args, "--help") {
-        println!("usage: nassau_min_res checkpoint <init|verify> ...");
+        println!("usage: ext checkpoint <init|verify> ...");
         println!("  init --out DIR [--overwrite]");
         println!("  verify --checkpoint DIR");
         return Ok(());
@@ -1349,7 +1342,7 @@ fn checkpoint_verify_cmd(args: &[String]) -> Result<(), String> {
 fn detailed_subalgebras_cmd(args: &[String]) -> Result<(), String> {
     validate_flags(args, DETAILED_SUBALGEBRAS_FLAGS)?;
     if has_flag(args, "-h") || has_flag(args, "--help") {
-        println!("usage: nassau_min_res detailed-subalgebras [--output FILE]");
+        println!("usage: ext detailed-subalgebras [--output FILE]");
         println!("Print detailed Ext_B table coverage for registered finite subalgebras.");
         return Ok(());
     }
@@ -1597,7 +1590,7 @@ fn validate_no_flags(args: &[String]) -> Result<(), String> {
 fn print_help() {
     println!(
         "\
-nassau_min_res
+ext
 
 Computes a low-dimensional minimal free resolution of F2 over the mod-2
 Steenrod algebra, using the Milnor basis.
@@ -1635,7 +1628,7 @@ Commands:
 fn print_compute_help() {
     println!(
         "\
-usage: nassau_min_res compute [OPTIONS]
+usage: ext compute [OPTIONS]
 
 Core options:
   --t N                        Maximum internal degree (default: 12)
@@ -1654,10 +1647,10 @@ Default output paths:
                                (automatically resumes the latest earlier one)
 
 Algorithm options:
-  --algorithm NAME             fixed-t-batch, auto, nassau, naive, or
+  --algorithm NAME             fixed-t-batch, auto, accelerated, naive, or
                                fixed-t-batch-shadow (default: fixed-t-batch)
   --subalgebras LIST           Comma-separated priority list for auto mode
-  --subalgebra NAME            Finite subalgebra for nassau mode
+  --subalgebra NAME            Finite subalgebra for accelerated mode
   --subalgebra-selection MODE  detailed or original
   --strict                     Disable the direct fallback where applicable
   --force                      Force the requested accelerated path
@@ -1678,7 +1671,7 @@ Fixed-t batch tuning:
   --batch-workers N            Outer groups (default: half the Rayon threads,
                                capped at 4)
   --batch-scheduler VALUE
-  --batch-inner auto|nassau|naive
+  --batch-inner auto|accelerated|naive
   --batch-commit-check on|off   Extra per-layer validation (default: off)
   --allow-full-naive-batch
 

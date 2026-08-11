@@ -33,9 +33,9 @@ jobs:
 
       - name: Run local end-to-end smoke test
         run: |
-          smoke_dir="$RUNNER_TEMP/nassau-min-res-smoke"
+          smoke_dir="$RUNNER_TEMP/ext-smoke"
           mkdir -p "$smoke_dir"
-          binary="$GITHUB_WORKSPACE/target/release/nassau_min_res"
+          binary="$GITHUB_WORKSPACE/target/release/ext"
           cd "$smoke_dir"
           "$binary" detailed-subalgebras > detailed-subalgebras.csv
           grep '^A2,.*found' detailed-subalgebras.csv

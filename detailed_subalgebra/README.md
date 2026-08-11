@@ -7,8 +7,8 @@ corresponding cases.
 The three published datasets and their metadata are embedded in the compiled
 executable. These files remain in the repository so users can inspect their
 provenance and verify their checksums. Advanced users can override an embedded
-table with the corresponding `NASSAU_*_EXT_BITSET` and
-`NASSAU_*_EXT_METADATA` environment variables.
+table with the corresponding `EXT_*_EXT_BITSET` and
+`EXT_*_EXT_METADATA` environment variables.
 
 Each dataset is published as:
 

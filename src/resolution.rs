@@ -148,7 +148,7 @@ pub enum ComputeMode {
         subalgebras: Vec<Subalgebra>,
         force: bool,
     },
-    Nassau {
+    Accelerated {
         subalgebra: Subalgebra,
         strict: bool,
         force: bool,
@@ -920,8 +920,8 @@ impl Resolution {
                 force,
             } => {
                 if let Some(subalgebra) = self.choose_subalgebra(s, t, subalgebras, *force) {
-                    let method = nassau_method_label(subalgebra, s, t);
-                    Ok((method, self.step_nassau(s, t, subalgebra)?))
+                    let method = algorithm2_method_label(subalgebra, s, t);
+                    Ok((method, self.step_algorithm2(s, t, subalgebra)?))
                 } else if *strict {
                     let names = subalgebras
                         .iter()
@@ -937,8 +937,8 @@ impl Resolution {
             }
             ComputeMode::AutoBoundedNaiveFallback { subalgebras, force } => {
                 if let Some(subalgebra) = self.choose_subalgebra(s, t, subalgebras, *force) {
-                    let method = nassau_method_label(subalgebra, s, t);
-                    Ok((method, self.step_nassau(s, t, subalgebra)?))
+                    let method = algorithm2_method_label(subalgebra, s, t);
+                    Ok((method, self.step_algorithm2(s, t, subalgebra)?))
                 } else {
                     let fallback_bytes = self.estimate_naive_homology_matrix_bytes(s, t);
                     if fallback_bytes <= FIXED_T_BOUNDED_NAIVE_FALLBACK_MAX_MATRIX_BYTES {
@@ -956,39 +956,39 @@ impl Resolution {
                         .collect::<Vec<_>>()
                         .join(",");
                     Err(format!(
-                        "fixed-t batch refuses large full naive fallback at (s,t)=({s},{t}); no selected Nassau subalgebra is justified, estimated naive matrix memory is {:.1}MiB, and the fixed-t safety limit is {:.1}MiB. Candidates were {names}. Choose a different --subalgebras list, use --batch-inner nassau --force for a controlled theorem-range experiment, or run low-dimensional diagnostics with --batch-inner naive.",
+                        "fixed-t batch refuses large full naive fallback at (s,t)=({s},{t}); no selected finite subalgebra is justified, estimated naive matrix memory is {:.1}MiB, and the fixed-t safety limit is {:.1}MiB. Candidates were {names}. Choose a different --subalgebras list, use --batch-inner accelerated --force for a controlled theorem-range experiment, or run low-dimensional diagnostics with --batch-inner naive.",
                         bytes_to_mb(fallback_bytes),
                         bytes_to_mb(FIXED_T_BOUNDED_NAIVE_FALLBACK_MAX_MATRIX_BYTES),
                     ))
                 }
             }
-            ComputeMode::Nassau {
+            ComputeMode::Accelerated {
                 subalgebra,
                 strict,
                 force,
             } => {
                 if subalgebra_selection_is_disabled(subalgebra) {
                     return Err(format!(
-                        "Nassau subalgebra {} is disabled for selection and computation",
+                        "Requested subalgebra {} is disabled for selection and computation",
                         subalgebra.name()
                     ));
                 }
                 let valid = *force || subalgebra.selection_condition_applies(s, t);
                 if valid {
                     Ok((
-                        nassau_method_label(subalgebra, s, t),
-                        self.step_nassau(s, t, subalgebra)?,
+                        algorithm2_method_label(subalgebra, s, t),
+                        self.step_algorithm2(s, t, subalgebra)?,
                     ))
                 } else if *strict {
                     let bound = subalgebra.lower_line_bound(s);
                     Err(format!(
-                        "Algorithm 2 with {} is not justified at (s,t)=({s},{t}); the Nassau lower-line condition needs t > {bound}. Remove --strict to bootstrap this bidegree with naive Algorithm 1, or choose another range/subalgebra.",
+                        "Algorithm 2 with {} is not justified at (s,t)=({s},{t}); the Algorithm 2 lower-line condition needs t > {bound}. Remove --strict to bootstrap this bidegree with naive Algorithm 1, or choose another range/subalgebra.",
                         subalgebra.name()
                     ))
                 } else {
                     Ok((
                         format!(
-                            "bootstrap-naive; {} not in Nassau lower-line range",
+                            "bootstrap-naive; {} not in Algorithm 2 lower-line range",
                             subalgebra.name()
                         ),
                         self.step_naive(s, t)?,
@@ -1524,7 +1524,7 @@ impl Resolution {
                     self.estimate_fixed_t_task_weight_from_signature_dims(s, t, subalgebra)
                 })
                 .unwrap_or_else(|| estimate_fixed_t_task_weight_from_dims(s, basis_dims)),
-            ComputeMode::Nassau {
+            ComputeMode::Accelerated {
                 subalgebra, force, ..
             } if !subalgebra_selection_is_disabled(subalgebra)
                 && (*force || subalgebra.selection_condition_applies(s, t)) =>
@@ -1552,7 +1552,7 @@ impl Resolution {
                     self.estimate_fixed_t_task_build_cost_from_signature_pairs(s, t, subalgebra)
                 })
                 .unwrap_or_else(|| estimate_fixed_t_task_weight_from_dims(s, basis_dims)),
-            ComputeMode::Nassau {
+            ComputeMode::Accelerated {
                 subalgebra, force, ..
             } if !subalgebra_selection_is_disabled(subalgebra)
                 && (*force || subalgebra.selection_condition_applies(s, t)) =>
@@ -1767,7 +1767,7 @@ impl Resolution {
                     .unwrap_or_else(|| scaled_missing(dim_weight))
             })
             .collect::<Vec<_>>();
-        if log_profile && std::env::var_os("NASSAU_PROFILE_FIXED_T_GROUPS").is_some() {
+        if log_profile && std::env::var_os("EXT_PROFILE_FIXED_T_GROUPS").is_some() {
             eprintln!(
                 "fixed_t_adaptive_scheduler t={t} history_t={history_t} active_s={} history_entries={} common_entries={} common_time_us={} common_dim_weight={}",
                 active_s.len(),
@@ -1800,7 +1800,7 @@ impl Resolution {
         basis_dims: &[usize],
         inner: &ComputeMode,
     ) {
-        if std::env::var_os("NASSAU_PROFILE_FIXED_T_GROUPS").is_none() {
+        if std::env::var_os("EXT_PROFILE_FIXED_T_GROUPS").is_none() {
             return;
         }
         let (weights, weight_source) =
@@ -2031,7 +2031,7 @@ impl Resolution {
                 fixed_t_task_dimensions_from_dims(s, t, basis_dims);
             let candidate_subalgebras = local.candidate_subalgebra_names_for_mode(s, t, mode);
             let chosen_subalgebra = local
-                .selected_nassau_subalgebra_for_mode(s, t, mode)
+                .selected_algorithm2_subalgebra_for_mode(s, t, mode)
                 .map(|subalgebra| subalgebra.name());
             let candidate_subalgebras_log = subalgebra_log_list(&candidate_subalgebras);
             let chosen_subalgebra_log =
@@ -2172,7 +2172,7 @@ impl Resolution {
                 fixed_t_task_dimensions_from_dims(s, t, basis_dims);
             let candidate_subalgebras = self.candidate_subalgebra_names_for_mode(s, t, mode);
             let chosen_subalgebra = self
-                .selected_nassau_subalgebra_for_mode(s, t, mode)
+                .selected_algorithm2_subalgebra_for_mode(s, t, mode)
                 .map(|subalgebra| subalgebra.name());
             let candidate_subalgebras_log = subalgebra_log_list(&candidate_subalgebras);
             let chosen_subalgebra_log =
@@ -2249,7 +2249,7 @@ impl Resolution {
     }
 
     fn log_fixed_t_worker_cache_profile(&self, worker_cache: &str, t: usize, group: &[usize]) {
-        if std::env::var_os("NASSAU_PROFILE_FIXED_T_WORKER_CACHE").is_none() {
+        if std::env::var_os("EXT_PROFILE_FIXED_T_WORKER_CACHE").is_none() {
             return;
         }
         let (mult_packed_terms, mult_packed_bytes) =
@@ -2316,7 +2316,7 @@ impl Resolution {
         };
         let estimated_bytes = caches.estimated_bytes();
         let keep = fits_after_trim && estimated_bytes <= limit_bytes;
-        if std::env::var_os("NASSAU_PROFILE_FIXED_T_WORKER_CACHE").is_some() {
+        if std::env::var_os("EXT_PROFILE_FIXED_T_WORKER_CACHE").is_some() {
             eprintln!(
                 "fixed_t_worker_product_cache_persist t={t} group_first={} group_last={} group_len={} keep={} estimated_mb={:.1} limit_mb={:.1} mult_packed={} mult_e0={} mult_e0_empty={} e0_profile_bank={} e0_profile_bank_mb={:.1} row_decomp={}",
                 group.first().copied().unwrap_or(0),
@@ -2341,7 +2341,7 @@ impl Resolution {
     }
 
     fn log_persistent_fixed_t_product_cache_profile(&self, t: usize) {
-        if std::env::var_os("NASSAU_PROFILE_FIXED_T_WORKER_CACHE").is_none() {
+        if std::env::var_os("EXT_PROFILE_FIXED_T_WORKER_CACHE").is_none() {
             return;
         }
         let mut total_bytes = 0usize;
@@ -2912,7 +2912,7 @@ impl Resolution {
     }
 
     fn log_memory_cache_estimate(&self, phase: &str, s: usize, t: usize) {
-        if std::env::var_os("NASSAU_PROFILE_MEMORY").is_none() {
+        if std::env::var_os("EXT_PROFILE_MEMORY").is_none() {
             return;
         }
 
@@ -2972,7 +2972,7 @@ impl Resolution {
             .sum::<usize>();
 
         eprintln!(
-            "nassau_mem_cache phase={phase} t={t} s={s} sig_matrices={} sig_matrix_cols={} sig_matrix_mb={:.1} sig_solvers={} sig_solver_pivots={} sig_solver_mb={:.1} sig_basis={} sig_basis_mb={:.1} full_lookup={} full_lookup_mb={:.1}",
+            "ext_mem_cache phase={phase} t={t} s={s} sig_matrices={} sig_matrix_cols={} sig_matrix_mb={:.1} sig_solvers={} sig_solver_pivots={} sig_solver_mb={:.1} sig_basis={} sig_basis_mb={:.1} full_lookup={} full_lookup_mb={:.1}",
             self.signature_matrix_cache.len(),
             matrix_columns,
             bytes_to_mb(matrix_bytes),
@@ -2985,7 +2985,7 @@ impl Resolution {
             bytes_to_mb(full_lookup_bytes),
         );
         eprintln!(
-            "nassau_mem_product phase={phase} t={t} s={s} mult_packed={} mult_packed_terms={} mult_packed_mb={:.1} mult_e0={} mult_e0_terms={} mult_e0_mb={:.1} mult_e0_empty={} mult_e0_empty_segments={} mult_e0_empty_mb={:.1} e0_profile_bank={} e0_profile_bank_mb={:.1} mult_e0_total_mb={:.1} row_decomp={} row_decomp_rows={} row_decomp_options={} row_decomp_mb={:.1}",
+            "ext_mem_product phase={phase} t={t} s={s} mult_packed={} mult_packed_terms={} mult_packed_mb={:.1} mult_e0={} mult_e0_terms={} mult_e0_mb={:.1} mult_e0_empty={} mult_e0_empty_segments={} mult_e0_empty_mb={:.1} e0_profile_bank={} e0_profile_bank_mb={:.1} mult_e0_total_mb={:.1} row_decomp={} row_decomp_rows={} row_decomp_options={} row_decomp_mb={:.1}",
             self.mult_packed_cache.len(),
             mult_packed_terms,
             bytes_to_mb(mult_packed_bytes),
@@ -3004,7 +3004,7 @@ impl Resolution {
             bytes_to_mb(row_decomp_bytes),
         );
         eprintln!(
-            "nassau_mem_basis phase={phase} t={t} s={s} resolution_mb={:.1} basis_cache={} basis_mb={:.1} basis_index_cache={} basis_index_mb={:.1} algebra_index_cache={} algebra_index_mb={:.1} coeff_signature_cache={} coeff_signature_mb={:.1} sig_index_cache={} sig_index_mb={:.1} sig_routing_cache={} sig_routing_mb={:.1} sig_translation_cache={} sig_translation_mb={:.1}",
+            "ext_mem_basis phase={phase} t={t} s={s} resolution_mb={:.1} basis_cache={} basis_mb={:.1} basis_index_cache={} basis_index_mb={:.1} algebra_index_cache={} algebra_index_mb={:.1} coeff_signature_cache={} coeff_signature_mb={:.1} sig_index_cache={} sig_index_mb={:.1} sig_routing_cache={} sig_routing_mb={:.1} sig_translation_cache={} sig_translation_mb={:.1}",
             bytes_to_mb(resolution_bytes),
             self.basis_cache.len(),
             bytes_to_mb(basis_bytes),
@@ -3048,9 +3048,9 @@ impl Resolution {
         self.e0_profile_bank_limit_bytes = None;
         self.mult_e0_cache_profile = None;
         release_allocator_pressure();
-        if std::env::var_os("NASSAU_PROFILE_MEMORY").is_some() {
+        if std::env::var_os("EXT_PROFILE_MEMORY").is_some() {
             eprintln!(
-                "nassau_mem_product_clear phase={phase} t={t} s={s} cleared_entries={} old_capacity={} cleared_empty_entries={} old_empty_capacity={} old_empty_segments={} cleared_bank_profiles={} cleared_bank_mb={:.1}",
+                "ext_mem_product_clear phase={phase} t={t} s={s} cleared_entries={} old_capacity={} cleared_empty_entries={} old_empty_capacity={} old_empty_segments={} cleared_bank_profiles={} cleared_bank_mb={:.1}",
                 entries,
                 capacity,
                 empty_entries,
@@ -3218,7 +3218,7 @@ impl Resolution {
         best.map(|(_, subalgebra)| subalgebra)
     }
 
-    fn selected_nassau_subalgebra_for_mode(
+    fn selected_algorithm2_subalgebra_for_mode(
         &mut self,
         s: usize,
         t: usize,
@@ -3231,7 +3231,7 @@ impl Resolution {
             | ComputeMode::AutoBoundedNaiveFallback { subalgebras, force } => {
                 self.choose_subalgebra(s, t, subalgebras, *force).cloned()
             }
-            ComputeMode::Nassau {
+            ComputeMode::Accelerated {
                 subalgebra, force, ..
             } if !subalgebra_selection_is_disabled(subalgebra)
                 && (*force || subalgebra.selection_condition_applies(s, t)) =>
@@ -3260,7 +3260,7 @@ impl Resolution {
                 })
                 .map(Subalgebra::name)
                 .collect(),
-            ComputeMode::Nassau {
+            ComputeMode::Accelerated {
                 subalgebra, force, ..
             } if !subalgebra_selection_is_disabled(subalgebra)
                 && (*force || subalgebra.selection_condition_applies(s, t)) =>
@@ -3277,7 +3277,7 @@ impl Resolution {
         t: usize,
         mode: &ComputeMode,
     ) -> (Option<usize>, Option<usize>, Option<usize>) {
-        let Some(subalgebra) = self.selected_nassau_subalgebra_for_mode(s, t, mode) else {
+        let Some(subalgebra) = self.selected_algorithm2_subalgebra_for_mode(s, t, mode) else {
             return (None, None, None);
         };
         let domain = self.basis_signature_dim(s, t, &subalgebra, 0);
@@ -3295,7 +3295,7 @@ impl Resolution {
         out.push_str("Minimal resolution over the mod-2 Steenrod algebra\n");
         out.push_str("Basis: Milnor Sq(R). Coefficients: F2.\n\n");
         out.push_str("Generators G_s,t. These are dual to Ext_A^{s,t}(F2,F2).\n");
-        out.push_str("When Algorithm 2 is selected, each Nassau step uses the named subalgebra and its signature filtration; low bidegrees outside the lower-line range are marked as bootstrap-naive unless --strict was used.\n\n");
+        out.push_str("When Algorithm 2 is selected, each Algorithm 2 step uses the named subalgebra and its signature filtration; low bidegrees outside the lower-line range are marked as bootstrap-naive unless --strict was used.\n\n");
         out.push_str(&self.step_summary());
         out.push('\n');
         out.push_str("s  t  stem  count  generators\n");
@@ -3378,14 +3378,14 @@ impl Resolution {
         Ok(added)
     }
 
-    fn step_nassau(
+    fn step_algorithm2(
         &mut self,
         s: usize,
         t: usize,
         subalgebra: &Subalgebra,
     ) -> Result<usize, String> {
-        let profile_detail = std::env::var_os("NASSAU_PROFILE_SIGNATURE_DETAIL").is_some();
-        let profile_verbose = std::env::var_os("NASSAU_PROFILE_MEMORY_VERBOSE").is_some();
+        let profile_detail = std::env::var_os("EXT_PROFILE_SIGNATURE_DETAIL").is_some();
+        let profile_verbose = std::env::var_os("EXT_PROFILE_MEMORY_VERBOSE").is_some();
         let total_timer = Instant::now();
         let profile_label = format!("t={t} s={s} B={}", subalgebra.name());
         log_process_memory("step_start", &profile_label);
@@ -3454,7 +3454,7 @@ impl Resolution {
             if quotient_batches.is_empty() {
                 if profile_detail {
                     eprintln!(
-                        "nassau_detail t={t} s={s} B={} added=0 d0_s={:.6} b0_s={:.6} homology_s={:.6} full_s=0.000000 lift_s=0.000000 total_s={:.6}",
+                        "ext_detail t={t} s={s} B={} added=0 d0_s={:.6} b0_s={:.6} homology_s={:.6} full_s=0.000000 lift_s=0.000000 total_s={:.6}",
                         subalgebra.name(),
                         d0_time.as_secs_f64(),
                         b0_time.as_secs_f64(),
@@ -3635,7 +3635,7 @@ impl Resolution {
                     if !has_error {
                         if profile_detail {
                             eprintln!(
-                                "nassau_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=false extract_s={extract_s:.6} solver_lookup_s=0.000000 solve_s=0.000000 full_s=0.000000 merge_s=0.000000 total_s={:.6}",
+                                "ext_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=false extract_s={extract_s:.6} solver_lookup_s=0.000000 solve_s=0.000000 full_s=0.000000 merge_s=0.000000 total_s={:.6}",
                                 subalgebra.name(),
                                 subalgebra.signatures()[sig_index],
                                 signature_error_count,
@@ -3659,7 +3659,7 @@ impl Resolution {
                     }
                     if profile_detail {
                         eprintln!(
-                            "nassau_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=true extract_s={extract_s:.6} solver_lookup_s={:.6} solve_s={:.6} solve_total_s={solve_total_s:.6} full_s={signature_full_s:.6} merge_s={merge_s:.6} total_s={:.6}",
+                            "ext_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=true extract_s={extract_s:.6} solver_lookup_s={:.6} solve_s={:.6} solve_total_s={solve_total_s:.6} full_s={signature_full_s:.6} merge_s={merge_s:.6} total_s={:.6}",
                             subalgebra.name(),
                             subalgebra.signatures()[sig_index],
                             signature_error_count,
@@ -3674,7 +3674,7 @@ impl Resolution {
                     if !error.is_zero() {
                         let remaining = self.format_vector(s.saturating_sub(1), t, &error);
                         return Err(format!(
-                            "Algorithm 2 produced a non-cycle at (s,t)=({s},{t}) for {}. Remaining error: {remaining}. Use --algorithm naive to compare, or use a bidegree where the Nassau lower-line condition applies.",
+                            "Algorithm 2 produced a non-cycle at (s,t)=({s},{t}) for {}. Remaining error: {remaining}. Use --algorithm naive to compare, or use a bidegree where the Algorithm 2 lower-line condition applies.",
                             subalgebra.name(),
                         ));
                     }
@@ -3700,7 +3700,7 @@ impl Resolution {
             );
             if profile_detail {
                 eprintln!(
-                    "nassau_detail t={t} s={s} B={} added={added} d0_s={:.6} b0_s={:.6} homology_s={:.6} full_s={:.6} lift_s={:.6} total_s={:.6}",
+                    "ext_detail t={t} s={s} B={} added={added} d0_s={:.6} b0_s={:.6} homology_s={:.6} full_s={:.6} lift_s={:.6} total_s={:.6}",
                     subalgebra.name(),
                     d0_time.as_secs_f64(),
                     b0_time.as_secs_f64(),
@@ -3745,7 +3745,7 @@ impl Resolution {
         if quotient.is_empty() {
             if profile_detail {
                 eprintln!(
-                    "nassau_detail t={t} s={s} B={} added=0 d0_s={:.6} b0_s={:.6} homology_s={:.6} full_s=0.000000 lift_s=0.000000 total_s={:.6}",
+                    "ext_detail t={t} s={s} B={} added=0 d0_s={:.6} b0_s={:.6} homology_s={:.6} full_s=0.000000 lift_s=0.000000 total_s={:.6}",
                     subalgebra.name(),
                     d0_time.as_secs_f64(),
                     b0_time.as_secs_f64(),
@@ -3935,7 +3935,7 @@ impl Resolution {
                     if !has_error {
                         if profile_detail {
                             eprintln!(
-                                "nassau_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=false extract_s={extract_s:.6} solver_lookup_s=0.000000 solve_s=0.000000 full_s=0.000000 merge_s=0.000000 total_s={:.6}",
+                                "ext_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=false extract_s={extract_s:.6} solver_lookup_s=0.000000 solve_s=0.000000 full_s=0.000000 merge_s=0.000000 total_s={:.6}",
                                 subalgebra.name(),
                                 subalgebra.signatures()[sig_index],
                                 signature_error_count,
@@ -3959,7 +3959,7 @@ impl Resolution {
                     }
                     if profile_detail {
                         eprintln!(
-                            "nassau_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=true extract_s={extract_s:.6} solver_lookup_s={:.6} solve_s={:.6} solve_total_s={solve_total_s:.6} full_s={signature_full_s:.6} merge_s={merge_s:.6} total_s={:.6}",
+                            "ext_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=true extract_s={extract_s:.6} solver_lookup_s={:.6} solve_s={:.6} solve_total_s={solve_total_s:.6} full_s={signature_full_s:.6} merge_s={merge_s:.6} total_s={:.6}",
                             subalgebra.name(),
                             subalgebra.signatures()[sig_index],
                             signature_error_count,
@@ -3974,7 +3974,7 @@ impl Resolution {
                     if !error.is_zero() {
                         let remaining = self.format_vector(s.saturating_sub(1), t, &error);
                         return Err(format!(
-                            "Algorithm 2 produced a non-cycle at (s,t)=({s},{t}) for {}. Remaining error: {remaining}. Use --algorithm naive to compare, or use a bidegree where the Nassau lower-line condition applies.",
+                            "Algorithm 2 produced a non-cycle at (s,t)=({s},{t}) for {}. Remaining error: {remaining}. Use --algorithm naive to compare, or use a bidegree where the Algorithm 2 lower-line condition applies.",
                             subalgebra.name(),
                         ));
                     }
@@ -3998,7 +3998,7 @@ impl Resolution {
             );
             if profile_detail {
                 eprintln!(
-                    "nassau_detail t={t} s={s} B={} added={added} d0_s={:.6} b0_s={:.6} homology_s={:.6} full_s={:.6} lift_s={:.6} total_s={:.6}",
+                    "ext_detail t={t} s={s} B={} added={added} d0_s={:.6} b0_s={:.6} homology_s={:.6} full_s={:.6} lift_s={:.6} total_s={:.6}",
                     subalgebra.name(),
                     d0_time.as_secs_f64(),
                     b0_time.as_secs_f64(),
@@ -4237,7 +4237,7 @@ impl Resolution {
                 if !has_error {
                     if profile_detail {
                         eprintln!(
-                            "nassau_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=false extract_s={extract_s:.6} solver_lookup_s=0.000000 solve_s=0.000000 full_s=0.000000 merge_s=0.000000 total_s={:.6}",
+                            "ext_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=false extract_s={extract_s:.6} solver_lookup_s=0.000000 solve_s=0.000000 full_s=0.000000 merge_s=0.000000 total_s={:.6}",
                             subalgebra.name(),
                             subalgebra.signatures()[sig_index],
                             signature_error_count,
@@ -4261,7 +4261,7 @@ impl Resolution {
                 }
                 if profile_detail {
                     eprintln!(
-                        "nassau_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=true extract_s={extract_s:.6} solver_lookup_s={:.6} solve_s={:.6} solve_total_s={solve_total_s:.6} full_s={signature_full_s:.6} merge_s={merge_s:.6} total_s={:.6}",
+                        "ext_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=true extract_s={extract_s:.6} solver_lookup_s={:.6} solve_s={:.6} solve_total_s={solve_total_s:.6} full_s={signature_full_s:.6} merge_s={merge_s:.6} total_s={:.6}",
                         subalgebra.name(),
                         subalgebra.signatures()[sig_index],
                         signature_error_count,
@@ -4291,7 +4291,7 @@ impl Resolution {
             if !has_error {
                 if profile_detail {
                     eprintln!(
-                        "nassau_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=false extract_s={extract_s:.6} solver_lookup_s=0.000000 solve_s=0.000000 full_s=0.000000 merge_s=0.000000 total_s={:.6}",
+                        "ext_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=false extract_s={extract_s:.6} solver_lookup_s=0.000000 solve_s=0.000000 full_s=0.000000 merge_s=0.000000 total_s={:.6}",
                         subalgebra.name(),
                         subalgebra.signatures()[sig_index],
                         signature_errors.len(),
@@ -4393,7 +4393,7 @@ impl Resolution {
             }
             if profile_detail {
                 eprintln!(
-                    "nassau_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=true extract_s={extract_s:.6} solver_lookup_s={:.6} solve_s={:.6} solve_total_s={solve_total_s:.6} full_s={signature_full_s:.6} merge_s={merge_s:.6} total_s={:.6}",
+                    "ext_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=true extract_s={extract_s:.6} solver_lookup_s={:.6} solve_s={:.6} solve_total_s={solve_total_s:.6} full_s={signature_full_s:.6} merge_s={merge_s:.6} total_s={:.6}",
                     subalgebra.name(),
                     subalgebra.signatures()[sig_index],
                     signature_error_count,
@@ -4410,7 +4410,7 @@ impl Resolution {
             if !error.is_zero() {
                 let remaining = self.format_vector(s.saturating_sub(1), t, &error);
                 return Err(format!(
-                    "Algorithm 2 produced a non-cycle at (s,t)=({s},{t}) for {}. Remaining error: {remaining}. Use --algorithm naive to compare, or use a bidegree where the Nassau lower-line condition applies.",
+                    "Algorithm 2 produced a non-cycle at (s,t)=({s},{t}) for {}. Remaining error: {remaining}. Use --algorithm naive to compare, or use a bidegree where the Algorithm 2 lower-line condition applies.",
                     subalgebra.name(),
                 ));
             }
@@ -4419,7 +4419,7 @@ impl Resolution {
         }
         if profile_detail {
             eprintln!(
-                "nassau_detail t={t} s={s} B={} added={added} d0_s={:.6} b0_s={:.6} homology_s={:.6} full_s={:.6} lift_s={:.6} total_s={:.6}",
+                "ext_detail t={t} s={s} B={} added={added} d0_s={:.6} b0_s={:.6} homology_s={:.6} full_s={:.6} lift_s={:.6} total_s={:.6}",
                 subalgebra.name(),
                 d0_time.as_secs_f64(),
                 b0_time.as_secs_f64(),
@@ -4558,9 +4558,9 @@ impl Resolution {
         let solver_timer = Instant::now();
         let solver = Arc::new(LinearSolver::new(&matrix.columns, matrix.target_dim));
         let solver_s = solver_timer.elapsed().as_secs_f64();
-        if std::env::var_os("NASSAU_PROFILE_SIGNATURE_DETAIL").is_some() {
+        if std::env::var_os("EXT_PROFILE_SIGNATURE_DETAIL").is_some() {
             eprintln!(
-                "nassau_solver_build t={t} s={s} B={} sig={sig_index} signature={} domain={} target={} pivots={} matrix_s={matrix_s:.6} solver_s={solver_s:.6} total_s={:.6}",
+                "ext_solver_build t={t} s={s} B={} sig={sig_index} signature={} domain={} target={} pivots={} matrix_s={matrix_s:.6} solver_s={solver_s:.6} total_s={:.6}",
                 subalgebra.name(),
                 subalgebra.signatures()[sig_index],
                 matrix.domain_dim,
@@ -4636,7 +4636,7 @@ impl Resolution {
         subalgebra: &Subalgebra,
         sig_index: usize,
     ) -> Result<LinearMap, String> {
-        let profile_detail = std::env::var_os("NASSAU_PROFILE_SIGNATURE_DETAIL").is_some();
+        let profile_detail = std::env::var_os("EXT_PROFILE_SIGNATURE_DETAIL").is_some();
         let matrix_timer = Instant::now();
         let domain_timer = Instant::now();
         let domain = self.basis_signature_cached(s, t, subalgebra, sig_index);
@@ -4654,7 +4654,7 @@ impl Resolution {
             }
             if profile_detail {
                 eprintln!(
-                    "nassau_matrix_detail t={t} s={s} B={} sig={sig_index} signature={} domain={} target={} domain_s={domain_s:.6} target_s=0.000000 index_s=0.000000 product_s=0.000000 columns_s={:.6} total_s={:.6}",
+                    "ext_matrix_detail t={t} s={s} B={} sig={sig_index} signature={} domain={} target={} domain_s={domain_s:.6} target_s=0.000000 index_s=0.000000 product_s=0.000000 columns_s={:.6} total_s={:.6}",
                     subalgebra.name(),
                     subalgebra.signatures()[sig_index],
                     domain.len(),
@@ -4771,7 +4771,7 @@ impl Resolution {
         let columns_s = columns_timer.elapsed().as_secs_f64();
         if profile_detail {
             eprintln!(
-                "nassau_matrix_detail t={t} s={s} B={} sig={sig_index} signature={} domain={} target={} domain_s={domain_s:.6} target_s={target_s:.6} index_s={index_s:.6} product_s={product_s:.6} columns_s={columns_s:.6} total_s={:.6}",
+                "ext_matrix_detail t={t} s={s} B={} sig={sig_index} signature={} domain={} target={} domain_s={domain_s:.6} target_s={target_s:.6} index_s={index_s:.6} product_s={product_s:.6} columns_s={columns_s:.6} total_s={:.6}",
                 subalgebra.name(),
                 subalgebra.signatures()[sig_index],
                 domain.len(),
@@ -4816,7 +4816,7 @@ impl Resolution {
             return Ok(Vec::new());
         }
 
-        let profile_full_timing = std::env::var_os("NASSAU_PROFILE_FULL_TIMING").is_some();
+        let profile_full_timing = std::env::var_os("EXT_PROFILE_FULL_TIMING").is_some();
         let total_timer = profile_full_timing.then(Instant::now);
 
         let target_timer = profile_full_timing.then(Instant::now);
@@ -4844,7 +4844,7 @@ impl Resolution {
         if uses.is_empty() {
             if let Some(total_timer) = total_timer {
                 eprintln!(
-                    "nassau_full_timing t={t} s={s} B={} sig={sig_index} vectors={} uses=0 groups=0 target_dim={} uses_s={uses_s:.6} target_s={target_s:.6} sort_s=0.000000 group_s=0.000000 domain_s=0.000000 columns_s=0.000000 merge_s=0.000000 total_s={:.6}",
+                    "ext_full_timing t={t} s={s} B={} sig={sig_index} vectors={} uses=0 groups=0 target_dim={} uses_s={uses_s:.6} target_s={target_s:.6} sort_s=0.000000 group_s=0.000000 domain_s=0.000000 columns_s=0.000000 merge_s=0.000000 total_s={:.6}",
                     subalgebra.name(),
                     vectors.len(),
                     target_dim,
@@ -4906,18 +4906,18 @@ impl Resolution {
             .unwrap_or_else(|| groups.len().max(1))
             .max(1);
         let chunk_count = groups.len().div_ceil(columns_per_chunk);
-        if std::env::var_os("NASSAU_PROFILE_MEMORY").is_some() {
+        if std::env::var_os("EXT_PROFILE_MEMORY").is_some() {
             let old_columns_mb = groups.len() as f64 * bytes_per_column as f64 / 1_048_576.0;
             let chunk_mb =
                 columns_per_chunk.min(groups.len()) as f64 * bytes_per_column as f64 / 1_048_576.0;
             let outputs_mb = vectors.len() as f64 * bytes_per_column as f64 / 1_048_576.0;
             let uses_mb =
                 uses.capacity() as f64 * std::mem::size_of::<(usize, usize)>() as f64 / 1_048_576.0;
-            let verbose = std::env::var_os("NASSAU_PROFILE_MEMORY_VERBOSE").is_some();
+            let verbose = std::env::var_os("EXT_PROFILE_MEMORY_VERBOSE").is_some();
             let large = old_columns_mb >= 128.0 || chunk_mb >= 128.0 || outputs_mb >= 128.0;
             if verbose || large {
                 eprintln!(
-                    "nassau_mem_full t={t} s={s} sig={sig_index} vectors={} uses={} selected={} target_dim={} bytes_per_column={} chunk_columns={} old_columns_mb={old_columns_mb:.1} chunk_mb={chunk_mb:.1} outputs_mb={outputs_mb:.1} uses_mb={uses_mb:.1}",
+                    "ext_mem_full t={t} s={s} sig={sig_index} vectors={} uses={} selected={} target_dim={} bytes_per_column={} chunk_columns={} old_columns_mb={old_columns_mb:.1} chunk_mb={chunk_mb:.1} outputs_mb={outputs_mb:.1} uses_mb={uses_mb:.1}",
                     vectors.len(),
                     uses.len(),
                     groups.len(),
@@ -4955,7 +4955,7 @@ impl Resolution {
             }
             if let Some(total_timer) = total_timer {
                 eprintln!(
-                    "nassau_full_timing t={t} s={s} B={} sig={sig_index} vectors={} uses={} groups={} target_dim={} bytes_per_column={} chunk_mb={} chunk_columns={} chunks={} rayon_threads={} uses_s={uses_s:.6} target_s={target_s:.6} sort_s={sort_s:.6} group_s={group_s:.6} domain_s={domain_s:.6} columns_s={columns_s:.6} merge_s={merge_s:.6} total_s={:.6}",
+                    "ext_full_timing t={t} s={s} B={} sig={sig_index} vectors={} uses={} groups={} target_dim={} bytes_per_column={} chunk_mb={} chunk_columns={} chunks={} rayon_threads={} uses_s={uses_s:.6} target_s={target_s:.6} sort_s={sort_s:.6} group_s={group_s:.6} domain_s={domain_s:.6} columns_s={columns_s:.6} merge_s={merge_s:.6} total_s={:.6}",
                     subalgebra.name(),
                     vectors.len(),
                     uses.len(),
@@ -5015,7 +5015,7 @@ impl Resolution {
 
         if let Some(total_timer) = total_timer {
             eprintln!(
-                "nassau_full_timing t={t} s={s} B={} sig={sig_index} vectors={} uses={} groups={} target_dim={} bytes_per_column={} chunk_mb={} chunk_columns={} chunks={} rayon_threads={} uses_s={uses_s:.6} target_s={target_s:.6} sort_s={sort_s:.6} group_s={group_s:.6} domain_s={domain_s:.6} columns_s={columns_s:.6} merge_s={merge_s:.6} total_s={:.6}",
+                "ext_full_timing t={t} s={s} B={} sig={sig_index} vectors={} uses={} groups={} target_dim={} bytes_per_column={} chunk_mb={} chunk_columns={} chunks={} rayon_threads={} uses_s={uses_s:.6} target_s={target_s:.6} sort_s={sort_s:.6} group_s={group_s:.6} domain_s={domain_s:.6} columns_s={columns_s:.6} merge_s={merge_s:.6} total_s={:.6}",
                 subalgebra.name(),
                 vectors.len(),
                 uses.len(),
@@ -5684,11 +5684,11 @@ impl Resolution {
         t: usize,
         sig_index: usize,
     ) {
-        let timing_enabled = std::env::var_os("NASSAU_PROFILE_PRODUCT_TIMING").is_some();
+        let timing_enabled = std::env::var_os("EXT_PROFILE_PRODUCT_TIMING").is_some();
         let total_timer = Instant::now();
         let profile_key = subalgebra.and_then(Subalgebra::profile_cache_key);
-        let profile_enabled = std::env::var_os("NASSAU_PROFILE_MEMORY").is_some();
-        let profile_verbose = std::env::var_os("NASSAU_PROFILE_MEMORY_VERBOSE").is_some();
+        let profile_enabled = std::env::var_os("EXT_PROFILE_MEMORY").is_some();
+        let profile_verbose = std::env::var_os("EXT_PROFILE_MEMORY_VERBOSE").is_some();
         let estimated_pairs = domain
             .iter()
             .map(|elem| self.generators[elem.generator].differential.len())
@@ -5815,7 +5815,7 @@ impl Resolution {
         let Some(subalgebra) = subalgebra else {
             if timing_enabled {
                 eprintln!(
-                    "nassau_product_timing t={t} s={s} sig={sig_index} profile=none domain={} estimated_pairs={} scan_s={scan_s:.6} e0_scan_empty_hits={e0_scan_empty_hits} full_sort_s={full_sort_s:.6} full_compute_s={full_compute_s:.6} full_insert_s={full_insert_s:.6} total_s={:.6}",
+                    "ext_product_timing t={t} s={s} sig={sig_index} profile=none domain={} estimated_pairs={} scan_s={scan_s:.6} e0_scan_empty_hits={e0_scan_empty_hits} full_sort_s={full_sort_s:.6} full_compute_s={full_compute_s:.6} full_insert_s={full_insert_s:.6} total_s={:.6}",
                     domain.len(),
                     estimated_pairs,
                     total_timer.elapsed().as_secs_f64(),
@@ -5826,7 +5826,7 @@ impl Resolution {
         let Some((_family, _n)) = profile_key else {
             if timing_enabled {
                 eprintln!(
-                    "nassau_product_timing t={t} s={s} sig={sig_index} profile=no_key domain={} estimated_pairs={} scan_s={scan_s:.6} e0_scan_empty_hits={e0_scan_empty_hits} full_sort_s={full_sort_s:.6} full_compute_s={full_compute_s:.6} full_insert_s={full_insert_s:.6} total_s={:.6}",
+                    "ext_product_timing t={t} s={s} sig={sig_index} profile=no_key domain={} estimated_pairs={} scan_s={scan_s:.6} e0_scan_empty_hits={e0_scan_empty_hits} full_sort_s={full_sort_s:.6} full_compute_s={full_compute_s:.6} full_insert_s={full_insert_s:.6} total_s={:.6}",
                     domain.len(),
                     estimated_pairs,
                     total_timer.elapsed().as_secs_f64(),
@@ -5987,7 +5987,7 @@ impl Resolution {
         release_allocator_pressure();
         if timing_enabled {
             eprintln!(
-                "nassau_product_timing t={t} s={s} sig={sig_index} profile={:?} domain={} estimated_pairs={} scan_s={scan_s:.6} e0_scan_empty_hits={e0_scan_empty_hits} full_sort_s={full_sort_s:.6} full_compute_s={full_compute_s:.6} full_insert_s={full_insert_s:.6} e0_sort_s={e0_sort_s:.6} e0_filter_s={e0_filter_s:.6} e0_post_filter_s={e0_post_filter_s:.6} e0_compute_s={e0_compute_s:.6} e0_merge_s={e0_merge_s:.6} prefilter_empty={} missing_len={} empty_write={} mult_e0={} mult_e0_empty={} total_s={:.6}",
+                "ext_product_timing t={t} s={s} sig={sig_index} profile={:?} domain={} estimated_pairs={} scan_s={scan_s:.6} e0_scan_empty_hits={e0_scan_empty_hits} full_sort_s={full_sort_s:.6} full_compute_s={full_compute_s:.6} full_insert_s={full_insert_s:.6} e0_sort_s={e0_sort_s:.6} e0_filter_s={e0_filter_s:.6} e0_post_filter_s={e0_post_filter_s:.6} e0_compute_s={e0_compute_s:.6} e0_merge_s={e0_merge_s:.6} prefilter_empty={} missing_len={} empty_write={} mult_e0={} mult_e0_empty={} total_s={:.6}",
                 profile_key,
                 domain.len(),
                 estimated_pairs,
@@ -6229,7 +6229,7 @@ fn dedup_fixed_t_worker_cache_overlaps(worker_caches: &mut [FixedTBatchWorkerCac
     dedup_field!(signature_matrix_cache, sig_matrices);
     dedup_field!(signature_solver_cache, sig_solvers);
 
-    if std::env::var_os("NASSAU_PROFILE_FIXED_T_WORKER_CACHE").is_some() {
+    if std::env::var_os("EXT_PROFILE_FIXED_T_WORKER_CACHE").is_some() {
         eprintln!(
             "fixed_t_worker_cache_overlap_dedup t={t} removed_total={} basis={} basis_index={} algebra_index={} full_lookup={} coeff_signature={} sig_basis={} sig_index={} sig_routing={} sig_translation={} sig_matrices={} sig_solvers={}",
             stats.total(),
@@ -6253,7 +6253,7 @@ fn log_fixed_t_worker_cache_delta_profile(
     t: usize,
     group: &[usize],
 ) {
-    if std::env::var_os("NASSAU_PROFILE_FIXED_T_WORKER_CACHE").is_none() {
+    if std::env::var_os("EXT_PROFILE_FIXED_T_WORKER_CACHE").is_none() {
         return;
     }
     let matrix_bytes = caches
@@ -6297,7 +6297,7 @@ fn log_fixed_t_group_done_profile(
     scheduler: FixedTBatchScheduler,
     group: &FixedTBatchGroupResult,
 ) {
-    if std::env::var_os("NASSAU_PROFILE_FIXED_T_GROUPS").is_none() {
+    if std::env::var_os("EXT_PROFILE_FIXED_T_GROUPS").is_none() {
         return;
     }
     eprintln!(
@@ -6314,7 +6314,7 @@ fn log_fixed_t_group_done_profile(
 }
 
 fn log_fixed_t_group_worker_done_profile(t: usize, group: &FixedTBatchGroupResult) {
-    if std::env::var_os("NASSAU_PROFILE_FIXED_T_GROUPS").is_none() {
+    if std::env::var_os("EXT_PROFILE_FIXED_T_GROUPS").is_none() {
         return;
     }
     eprintln!(
@@ -6330,11 +6330,11 @@ fn log_fixed_t_group_worker_done_profile(t: usize, group: &FixedTBatchGroupResul
 }
 
 fn fixed_t_detailed_logging_enabled() -> bool {
-    std::env::var_os("NASSAU_PROFILE_FIXED_T_TASKS").is_some()
+    std::env::var_os("EXT_PROFILE_FIXED_T_TASKS").is_some()
 }
 
 fn fixed_t_worker_product_cache_limit_bytes() -> Option<usize> {
-    let Some(raw) = std::env::var("NASSAU_FIXED_T_WORKER_PRODUCT_CACHE_MB").ok() else {
+    let Some(raw) = std::env::var("EXT_FIXED_T_WORKER_PRODUCT_CACHE_MB").ok() else {
         return DEFAULT_FIXED_T_WORKER_PRODUCT_CACHE_MB.checked_mul(1024 * 1024);
     };
     let trimmed = raw.trim();
@@ -6345,7 +6345,7 @@ fn fixed_t_worker_product_cache_limit_bytes() -> Option<usize> {
         Ok(limit_mb) if limit_mb > 0 => limit_mb.checked_mul(1024 * 1024),
         _ => {
             eprintln!(
-                "warning: ignoring invalid NASSAU_FIXED_T_WORKER_PRODUCT_CACHE_MB={raw:?}; expected a positive integer MiB limit"
+                "warning: ignoring invalid EXT_FIXED_T_WORKER_PRODUCT_CACHE_MB={raw:?}; expected a positive integer MiB limit"
             );
             None
         }
@@ -6353,7 +6353,7 @@ fn fixed_t_worker_product_cache_limit_bytes() -> Option<usize> {
 }
 
 fn fixed_t_e0_profile_bank_enabled() -> bool {
-    let Some(raw) = std::env::var("NASSAU_FIXED_T_E0_PROFILE_BANK").ok() else {
+    let Some(raw) = std::env::var("EXT_FIXED_T_E0_PROFILE_BANK").ok() else {
         return true;
     };
     let trimmed = raw.trim();
@@ -6370,13 +6370,13 @@ fn fixed_t_e0_profile_bank_enabled() -> bool {
         return false;
     }
     eprintln!(
-        "warning: ignoring invalid NASSAU_FIXED_T_E0_PROFILE_BANK={raw:?}; expected 0/1, true/false, yes/no, or on/off"
+        "warning: ignoring invalid EXT_FIXED_T_E0_PROFILE_BANK={raw:?}; expected 0/1, true/false, yes/no, or on/off"
     );
     false
 }
 
 fn fixed_t_choice_dim_prewarm_enabled() -> bool {
-    let Some(raw) = std::env::var("NASSAU_FIXED_T_CHOICE_DIM_PREWARM").ok() else {
+    let Some(raw) = std::env::var("EXT_FIXED_T_CHOICE_DIM_PREWARM").ok() else {
         return true;
     };
     let trimmed = raw.trim();
@@ -6393,7 +6393,7 @@ fn fixed_t_choice_dim_prewarm_enabled() -> bool {
         return false;
     }
     eprintln!(
-        "warning: ignoring invalid NASSAU_FIXED_T_CHOICE_DIM_PREWARM={raw:?}; expected 0/1, true/false, yes/no, or on/off"
+        "warning: ignoring invalid EXT_FIXED_T_CHOICE_DIM_PREWARM={raw:?}; expected 0/1, true/false, yes/no, or on/off"
     );
     false
 }
@@ -6640,16 +6640,16 @@ fn f_over_matching_fp_preference(candidate: &Subalgebra, incumbent: &Subalgebra)
     }
 }
 
-fn nassau_method_label(subalgebra: &Subalgebra, s: usize, t: usize) -> String {
+fn algorithm2_method_label(subalgebra: &Subalgebra, s: usize, t: usize) -> String {
     if subalgebra_selection_mode() == SubalgebraSelectionMode::Detailed {
         let applicability = subalgebra.selection_applicability(s, t);
         format!(
-            "nassau({};source={})",
+            "algorithm2({};source={})",
             subalgebra.name(),
             applicability.certification_source
         )
     } else {
-        format!("nassau({})", subalgebra.name())
+        format!("algorithm2({})", subalgebra.name())
     }
 }
 
@@ -6676,12 +6676,12 @@ fn fixed_t_batch_inner_name(mode: &ComputeMode) -> String {
                 .collect::<Vec<_>>()
                 .join(",")
         ),
-        ComputeMode::Nassau {
+        ComputeMode::Accelerated {
             subalgebra,
             strict,
             force,
         } => format!(
-            "nassau({};strict={strict};force={force})",
+            "algorithm2({};strict={strict};force={force})",
             subalgebra.name()
         ),
         ComputeMode::FixedTBatch { .. } => "fixed-t-batch".to_string(),
@@ -6952,7 +6952,7 @@ fn sticky_contiguous_groups(
     };
     let Some(sticky) = sticky_groups_from_previous_ranges(values, previous_ranges, group_count)
     else {
-        if std::env::var_os("NASSAU_PROFILE_FIXED_T_GROUPS").is_some() {
+        if std::env::var_os("EXT_PROFILE_FIXED_T_GROUPS").is_some() {
             eprintln!(
                 "fixed_t_sticky_scheduler t={t} previous_ranges={} chosen=baseline reason=incompatible-ranges",
                 previous_ranges.len(),
@@ -6967,7 +6967,7 @@ fn sticky_contiguous_groups(
         .saturating_mul(max_over_base_num.max(1))
         .div_ceil(max_over_base_den.max(1));
     let use_sticky = sticky_max <= allowed;
-    if std::env::var_os("NASSAU_PROFILE_FIXED_T_GROUPS").is_some() {
+    if std::env::var_os("EXT_PROFILE_FIXED_T_GROUPS").is_some() {
         eprintln!(
             "fixed_t_sticky_scheduler t={t} previous_ranges={} baseline_groups={} sticky_groups={} base_max_weight={} sticky_max_weight={} allowed_max_weight={} chosen={}",
             previous_ranges.len(),
@@ -7758,8 +7758,8 @@ where
 fn fixed_t_task_memory_sample_interval() -> Option<Duration> {
     static INTERVAL: OnceLock<Option<Duration>> = OnceLock::new();
     *INTERVAL.get_or_init(|| {
-        env_duration_secs("NASSAU_TASK_MEMORY_INTERVAL_SECS")
-            .or_else(|| env_duration_secs("NASSAU_PROCESS_MEMORY_INTERVAL_SECS"))
+        env_duration_secs("EXT_TASK_MEMORY_INTERVAL_SECS")
+            .or_else(|| env_duration_secs("EXT_PROCESS_MEMORY_INTERVAL_SECS"))
             .unwrap_or(Some(Duration::from_secs(
                 DEFAULT_FIXED_T_TASK_MEMORY_SAMPLE_SECS,
             )))
@@ -7880,7 +7880,7 @@ fn scoped_full_differential_output_chunk_bytes_override(
 fn configured_full_differential_chunk_bytes() -> usize {
     static CHUNK_BYTES: OnceLock<usize> = OnceLock::new();
     *CHUNK_BYTES.get_or_init(|| {
-        let Some(raw) = std::env::var_os("NASSAU_FULL_DIFFERENTIAL_CHUNK_MB") else {
+        let Some(raw) = std::env::var_os("EXT_FULL_DIFFERENTIAL_CHUNK_MB") else {
             return DEFAULT_FULL_DIFFERENTIAL_CHUNK_BYTES;
         };
         let raw = raw.to_string_lossy();
@@ -7889,7 +7889,7 @@ fn configured_full_differential_chunk_bytes() -> usize {
             Ok(mib) => mib.saturating_mul(1024 * 1024),
             Err(_) => {
                 eprintln!(
-                    "warning: ignoring invalid NASSAU_FULL_DIFFERENTIAL_CHUNK_MB={raw}; using {} MiB",
+                    "warning: ignoring invalid EXT_FULL_DIFFERENTIAL_CHUNK_MB={raw}; using {} MiB",
                     DEFAULT_FULL_DIFFERENTIAL_CHUNK_BYTES / (1024 * 1024),
                 );
                 DEFAULT_FULL_DIFFERENTIAL_CHUNK_BYTES
@@ -7926,7 +7926,7 @@ fn full_differential_output_batch_len(target_dim: usize, vector_count: usize) ->
 fn e0_scan_empty_skip_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| {
-        std::env::var("NASSAU_E0_SCAN_EMPTY_SKIP")
+        std::env::var("EXT_E0_SCAN_EMPTY_SKIP")
             .map(|raw| raw.trim() != "0")
             .unwrap_or(true)
     })
@@ -8105,16 +8105,16 @@ mod tests {
     }
 
     #[test]
-    fn nassau_a0_agrees_with_naive_in_small_range() {
+    fn algorithm2_a0_agrees_with_naive_in_small_range() {
         let max_t = 10;
         let mut naive = Resolution::new(max_t);
         naive.compute(max_t, ComputeMode::Naive).unwrap();
 
-        let mut nassau = Resolution::new(max_t);
-        nassau
+        let mut accelerated = Resolution::new(max_t);
+        accelerated
             .compute(
                 max_t,
-                ComputeMode::Nassau {
+                ComputeMode::Accelerated {
                     subalgebra: Subalgebra::a(0).unwrap(),
                     strict: false,
                     force: false,
@@ -8127,12 +8127,12 @@ mod tests {
             .iter()
             .map(|g| (g.s, g.t))
             .collect::<Vec<_>>();
-        let nassau_degrees = nassau
+        let algorithm2_degrees = accelerated
             .generators
             .iter()
             .map(|g| (g.s, g.t))
             .collect::<Vec<_>>();
-        assert_eq!(nassau_degrees, naive_degrees);
+        assert_eq!(algorithm2_degrees, naive_degrees);
     }
 
     #[test]
@@ -8716,7 +8716,7 @@ mod tests {
     }
 
     #[test]
-    fn scheduler_task_weight_uses_signature_reduced_dimensions_for_nassau() {
+    fn scheduler_task_weight_uses_signature_reduced_dimensions_for_algorithm2() {
         let mut resolution = Resolution::new(24);
         let t = 20;
         let s = 0;
@@ -8724,7 +8724,7 @@ mod tests {
             .map(|index| resolution.basis_dimension_uncached(index, t))
             .collect::<Vec<_>>();
         let raw_weight = estimate_fixed_t_task_weight_from_dims(s, &basis_dims);
-        let inner = ComputeMode::Nassau {
+        let inner = ComputeMode::Accelerated {
             subalgebra: Subalgebra::a(0).unwrap(),
             strict: false,
             force: true,
@@ -8733,7 +8733,7 @@ mod tests {
 
         assert!(
             reduced_weight < raw_weight,
-            "scheduler should use signature-reduced dimensions for Nassau tasks: raw={raw_weight} reduced={reduced_weight}"
+            "scheduler should use signature-reduced dimensions for Algorithm 2 tasks: raw={raw_weight} reduced={reduced_weight}"
         );
     }
 
@@ -8756,17 +8756,17 @@ mod tests {
         };
 
         let b3321 = resolution
-            .selected_nassau_subalgebra_for_mode(6, 160, &mode)
+            .selected_algorithm2_subalgebra_for_mode(6, 160, &mode)
             .unwrap();
         assert_eq!(b3321.name(), "B3321");
 
         let b3221 = resolution
-            .selected_nassau_subalgebra_for_mode(7, 160, &mode)
+            .selected_algorithm2_subalgebra_for_mode(7, 160, &mode)
             .unwrap();
         assert_eq!(b3221.name(), "B3221");
 
         let b3211 = resolution
-            .selected_nassau_subalgebra_for_mode(8, 160, &mode)
+            .selected_algorithm2_subalgebra_for_mode(8, 160, &mode)
             .unwrap();
         assert_eq!(b3211.name(), "B3211");
     }
@@ -8832,7 +8832,7 @@ mod tests {
         let names = resolution.candidate_subalgebra_names_for_mode(40, 40, &mode);
         assert!(!names.iter().any(|name| name == "Fp3"));
 
-        let explicit_fp3 = ComputeMode::Nassau {
+        let explicit_fp3 = ComputeMode::Accelerated {
             subalgebra: fp3,
             strict: false,
             force: true,
@@ -8930,7 +8930,7 @@ mod tests {
         let mut resolution = Resolution::new(8);
         let active_s = vec![0, 1, 2, 3, 4, 5];
         let basis_dims = vec![100; 8];
-        let inner = ComputeMode::Nassau {
+        let inner = ComputeMode::Accelerated {
             subalgebra: Subalgebra::a(0).unwrap(),
             strict: false,
             force: true,
@@ -8984,7 +8984,7 @@ mod tests {
         let mut resolution = Resolution::new(299);
         let active_s = (0..=298).collect::<Vec<_>>();
         let basis_dims = vec![10; 300];
-        let inner = ComputeMode::Nassau {
+        let inner = ComputeMode::Accelerated {
             subalgebra: Subalgebra::a(0).unwrap(),
             strict: false,
             force: true,
@@ -9193,7 +9193,7 @@ mod tests {
         );
         let active_s = vec![0, 1, 2];
         let basis_dims = vec![1, 3, 5, 1];
-        let inner = ComputeMode::Nassau {
+        let inner = ComputeMode::Accelerated {
             subalgebra: Subalgebra::a(0).unwrap(),
             strict: false,
             force: true,

@@ -1,11 +1,11 @@
 [package]
-name = "nassau_min_res"
+name = "ext"
 version = "0.1.0"
 edition = "2024"
 description = "Compute minimal resolutions over the mod-2 Steenrod algebra"
 readme = "README.md"
 license = "MIT"
-repository = "https://github.com/wulx02/nassau_min_res"
+repository = "https://github.com/wulx02/ext"
 publish = false
 
 [dependencies]

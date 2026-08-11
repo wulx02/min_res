@@ -25,7 +25,7 @@ pub struct MemoryMonitorGuard {
 
 impl MemoryMonitorGuard {
     pub fn start_from_env() -> Option<Self> {
-        let interval = env::var("NASSAU_PROCESS_MEMORY_INTERVAL_SECS")
+        let interval = env::var("EXT_PROCESS_MEMORY_INTERVAL_SECS")
             .ok()
             .and_then(|raw| raw.parse::<u64>().ok())
             .filter(|&seconds| seconds > 0)?;
@@ -37,7 +37,7 @@ impl MemoryMonitorGuard {
             loop {
                 if let Some(memory) = ProcessMemory::now() {
                     eprintln!(
-                        "memory nassau_min_res sample rss_gib={:.3} rss_peak_gib={:.3} compressed_gib={:.3} compressed_peak_gib={:.3} phys_footprint_gib={:.3} phys_footprint_peak_gib={:.3}",
+                        "memory ext sample rss_gib={:.3} rss_peak_gib={:.3} compressed_gib={:.3} compressed_peak_gib={:.3} phys_footprint_gib={:.3} phys_footprint_peak_gib={:.3}",
                         bytes_to_gib(memory.resident_bytes),
                         bytes_to_gib(memory.resident_peak_bytes),
                         bytes_to_gib(memory.compressed_bytes),
@@ -71,13 +71,13 @@ impl Drop for MemoryMonitorGuard {
 }
 
 pub fn log_process_memory(phase: &str, details: impl AsRef<str>) {
-    if env::var_os("NASSAU_PROFILE_MEMORY").is_none() {
+    if env::var_os("EXT_PROFILE_MEMORY").is_none() {
         return;
     }
     let details = details.as_ref();
     if let Some(memory) = ProcessMemory::now() {
         eprintln!(
-            "nassau_mem_process phase={phase} {details} rss_gib={:.3} rss_peak_gib={:.3} compressed_gib={:.3} compressed_peak_gib={:.3} phys_footprint_gib={:.3} phys_footprint_peak_gib={:.3}",
+            "ext_mem_process phase={phase} {details} rss_gib={:.3} rss_peak_gib={:.3} compressed_gib={:.3} compressed_peak_gib={:.3} phys_footprint_gib={:.3} phys_footprint_peak_gib={:.3}",
             bytes_to_gib(memory.resident_bytes),
             bytes_to_gib(memory.resident_peak_bytes),
             bytes_to_gib(memory.compressed_bytes),
