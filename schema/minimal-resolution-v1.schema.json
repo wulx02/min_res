@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ext minimal resolution JSONL v1 record",
+  "description": "Schema for each line of an ext minimal-resolution JSON Lines export.",
+  "oneOf": [
+    { "$ref": "#/$defs/metadata" },
+    { "$ref": "#/$defs/generator" }
+  ],
+  "$defs": {
+    "nonnegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_type",
+        "format",
+        "format_version",
+        "prime",
+        "coefficient_field",
+        "algebra",
+        "basis",
+        "max_internal_degree",
+        "generator_count",
+        "differential_term_count",
+        "rank_convention",
+        "source_checkpoint"
+      ],
+      "properties": {
+        "record_type": { "const": "metadata" },
+        "format": { "const": "ext-minimal-resolution-jsonl" },
+        "format_version": { "const": 1 },
+        "prime": { "const": 2 },
+        "coefficient_field": { "const": "F2" },
+        "algebra": { "const": "mod-2 Steenrod algebra" },
+        "basis": { "const": "Milnor" },
+        "max_internal_degree": { "$ref": "#/$defs/nonnegativeInteger" },
+        "generator_count": { "$ref": "#/$defs/nonnegativeInteger" },
+        "differential_term_count": { "$ref": "#/$defs/nonnegativeInteger" },
+        "rank_convention": { "type": "string" },
+        "source_checkpoint": { "$ref": "#/$defs/sourceCheckpoint" }
+      }
+    },
+    "sourceCheckpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "format_version",
+        "completed_internal_degree",
+        "source_git_commit"
+      ],
+      "properties": {
+        "format": { "type": "string" },
+        "format_version": { "$ref": "#/$defs/nonnegativeInteger" },
+        "completed_internal_degree": { "$ref": "#/$defs/nonnegativeInteger" },
+        "source_git_commit": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_type",
+        "format_version",
+        "id",
+        "name",
+        "s",
+        "t",
+        "stem",
+        "differential"
+      ],
+      "properties": {
+        "record_type": { "const": "generator" },
+        "format_version": { "const": 1 },
+        "id": { "$ref": "#/$defs/nonnegativeInteger" },
+        "name": { "type": "string" },
+        "s": { "$ref": "#/$defs/nonnegativeInteger" },
+        "t": { "$ref": "#/$defs/nonnegativeInteger" },
+        "stem": { "$ref": "#/$defs/nonnegativeInteger" },
+        "differential": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/differentialTerm" }
+        }
+      }
+    },
+    "differentialTerm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_id", "target_name", "milnor"],
+      "properties": {
+        "target_id": { "$ref": "#/$defs/nonnegativeInteger" },
+        "target_name": { "type": "string" },
+        "milnor": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonnegativeInteger" }
+        }
+      }
+    }
+  }
+}

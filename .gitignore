@@ -11,7 +11,8 @@ resolution_*.txt
 
 # Local run products.
 /checkpoint/
-/csv_output/
+/rank_output/
+/resolution_output/
 /runs/
 /logs/
 /exports/

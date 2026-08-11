@@ -23,7 +23,8 @@ use subalgebra::{
 };
 
 const DEFAULT_CHECKPOINT_DIR: &str = "checkpoint";
-const DEFAULT_CSV_OUTPUT_DIR: &str = "csv_output";
+const DEFAULT_RANK_OUTPUT_DIR: &str = "rank_output";
+const DEFAULT_RESOLUTION_OUTPUT_DIR: &str = "resolution_output";
 const DEFAULT_CACHE_WINDOW_T: usize = 8;
 const MAX_DEFAULT_FIXED_T_BATCH_WORKERS: usize = 4;
 const FULL_NAIVE_BATCH_DIAGNOSTIC_MAX_T: usize = 64;
@@ -50,11 +51,9 @@ fn run() -> Result<(), String> {
         "multiply" => multiply_cmd(&args),
         "basis" => basis_cmd(&args),
         "range" => range_cmd(&args),
-        "export" | "export-csv" => export_cmd(&args),
-        "detailed-subalgebras"
-        | "detailed_subalgebras"
-        | "detailed-ext-tables"
-        | "detailed_ext_tables" => detailed_subalgebras_cmd(&args),
+        "export-bidegree-ranks" => export_bidegree_ranks_cmd(&args),
+        "export-resolution" => export_resolution_cmd(&args),
+        "detailed-subalgebras" => detailed_subalgebras_cmd(&args),
         _ => Err(format!("unknown command `{cmd}`; run with --help")),
     }
 }
@@ -69,9 +68,6 @@ fn compute_cmd(args: &[String]) -> Result<(), String> {
     let total_timer = Instant::now();
     let t_flag = parse_usize_flag(args, "--t")?;
     let max_t = t_flag.unwrap_or(12);
-    let output = parse_string_flag_any(args, &["--output", "--out"])?.map(PathBuf::from);
-    let show_differentials = has_flag(args, "--show-differentials");
-    let show_steps = has_flag(args, "--show-steps");
     let checkpoint_paths = checkpoint_paths_for(args, max_t)?;
     let fresh = has_flag(args, "--fresh");
     let verbose = has_flag(args, "--verbose");
@@ -94,7 +90,6 @@ fn compute_cmd(args: &[String]) -> Result<(), String> {
     if verbose {
         print_startup_info(
             max_t,
-            output.as_ref(),
             checkpoint_paths.load.as_ref(),
             checkpoint_paths.save.as_ref(),
             rayon_threads,
@@ -202,27 +197,11 @@ fn compute_cmd(args: &[String]) -> Result<(), String> {
     )?;
     let compute_s = compute_timer.elapsed().as_secs_f64();
 
-    if let Some(path) = output {
-        let report = res.report(max_t, show_differentials, show_steps);
-        std::fs::write(&path, &report)
-            .map_err(|e| format!("failed to write {}: {e}", path.display()))?;
-        println!("wrote {}", path.display());
-        println!("computed t <= {max_t}, s <= {max_t}");
-        if show_steps {
-            println!("included per-bidegree Algorithm 2/Algorithm 1 log");
-        } else {
-            println!("use --show-steps to include the per-bidegree Algorithm 2/Algorithm 1 log");
-        }
-    } else if has_flag(args, "--print-report") {
-        let report = res.report(max_t, show_differentials, show_steps);
-        print!("{report}");
-    } else {
-        println!(
-            "computed t <= {max_t}, s <= {}, generators={}",
-            max_t,
-            res.generator_count()
-        );
-    }
+    println!(
+        "computed t <= {max_t}, s <= {}, generators={}",
+        max_t,
+        res.generator_count()
+    );
     if verbose {
         eprintln!(
             "timing ext compute_s={compute_s:.6} total_s={:.6}",
@@ -433,8 +412,12 @@ fn default_checkpoint_path(max_t: usize) -> PathBuf {
     Path::new(DEFAULT_CHECKPOINT_DIR).join(format!("t{max_t}.checkpoint"))
 }
 
-fn default_csv_output_path(max_t: usize) -> PathBuf {
-    Path::new(DEFAULT_CSV_OUTPUT_DIR).join(format!("t{max_t}.csv"))
+fn default_rank_output_path(max_t: usize) -> PathBuf {
+    Path::new(DEFAULT_RANK_OUTPUT_DIR).join(format!("t{max_t}.csv"))
+}
+
+fn default_resolution_output_path(max_t: usize) -> PathBuf {
+    Path::new(DEFAULT_RESOLUTION_OUTPUT_DIR).join(format!("t{max_t}.jsonl"))
 }
 
 fn checkpoint_degree_from_name(name: &str) -> Option<usize> {
@@ -511,7 +494,6 @@ fn print_checkpoint_paths(load_path: Option<&PathBuf>, save_path: Option<&PathBu
 
 fn print_startup_info(
     max_t: usize,
-    output: Option<&PathBuf>,
     load_checkpoint: Option<&PathBuf>,
     save_checkpoint: Option<&PathBuf>,
     rayon_threads: usize,
@@ -520,14 +502,6 @@ fn print_startup_info(
     let cwd = env::current_dir()
         .map(|path| path.display().to_string())
         .unwrap_or_else(|_| "unknown".to_string());
-    let output_path = output
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|| "none".to_string());
-    let output_dir = output
-        .and_then(|path| path.parent())
-        .filter(|path| !path.as_os_str().is_empty())
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|| ".".to_string());
     eprintln!(
         "startup ext package={} version={} git_commit={} cwd={} argv={:?}",
         env!("CARGO_PKG_NAME"),
@@ -537,11 +511,9 @@ fn print_startup_info(
         argv,
     );
     eprintln!(
-        "startup ext max_t={} max_s={} output={} output_dir={} load_checkpoint={} save_checkpoint={} rayon_threads={} env_RAYON_NUM_THREADS={} env_EXT_FULL_DIFFERENTIAL_CHUNK_MB={}",
+        "startup ext max_t={} max_s={} load_checkpoint={} save_checkpoint={} rayon_threads={} env_RAYON_NUM_THREADS={} env_EXT_FULL_DIFFERENTIAL_CHUNK_MB={}",
         max_t,
         max_t,
-        output_path,
-        output_dir,
         checkpoint_display(load_checkpoint),
         checkpoint_display(save_checkpoint),
         rayon_threads,
@@ -1199,18 +1171,87 @@ fn range_cmd(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-fn export_cmd(args: &[String]) -> Result<(), String> {
+fn export_bidegree_ranks_cmd(args: &[String]) -> Result<(), String> {
     validate_flags(args, EXPORT_FLAGS)?;
     if has_flag(args, "-h") || has_flag(args, "--help") {
-        println!("usage: ext export [--t N] [--checkpoint DIR] [--output FILE] [--overwrite]");
+        println!(
+            "usage: ext export-bidegree-ranks [--t N] [--checkpoint DIR] [--output FILE] [--overwrite]"
+        );
         println!(
             "Export an existing checkpoint directory to a bidegree rank CSV with columns s,t,rank."
         );
-        println!("By default, --t N reads checkpoint/tN.checkpoint and writes csv_output/tN.csv.");
+        println!("By default, --t N reads checkpoint/tN.checkpoint and writes rank_output/tN.csv.");
         println!("With neither --t nor --checkpoint, the latest default checkpoint is exported.");
         return Ok(());
     }
 
+    let source = checkpoint_export_source(args)?;
+    let output = parse_string_flag(args, "--output")?
+        .map(PathBuf::from)
+        .unwrap_or_else(|| default_rank_output_path(source.export_t));
+    ensure_output_path_is_free(&output, has_flag(args, "--overwrite"))?;
+    let rows =
+        sharded_io::export_sharded_generators_csv(&source.checkpoint, source.export_t, &output)?;
+    println!(
+        "exported {} nonzero bidegree ranks with t <= {} from {} to {}",
+        rows,
+        source.export_t,
+        source.checkpoint.display(),
+        output.display()
+    );
+    println!(
+        "checkpoint completed full layers t <= {}",
+        source.manifest.completed_internal_degree
+    );
+    Ok(())
+}
+
+fn export_resolution_cmd(args: &[String]) -> Result<(), String> {
+    validate_flags(args, EXPORT_FLAGS)?;
+    if has_flag(args, "-h") || has_flag(args, "--help") {
+        println!(
+            "usage: ext export-resolution [--t N] [--checkpoint DIR] [--output FILE] [--overwrite]"
+        );
+        println!(
+            "Export the complete minimal resolution to versioned JSON Lines, including generators and differentials."
+        );
+        println!(
+            "By default, --t N reads checkpoint/tN.checkpoint and writes resolution_output/tN.jsonl."
+        );
+        println!("With neither --t nor --checkpoint, the latest default checkpoint is exported.");
+        return Ok(());
+    }
+
+    let source = checkpoint_export_source(args)?;
+    let output = parse_string_flag(args, "--output")?
+        .map(PathBuf::from)
+        .unwrap_or_else(|| default_resolution_output_path(source.export_t));
+    ensure_output_path_is_free(&output, has_flag(args, "--overwrite"))?;
+    let summary =
+        sharded_io::export_minimal_resolution_jsonl(&source.checkpoint, source.export_t, &output)?;
+    println!(
+        "exported {} generators and {} differential terms with t <= {} from {} to {}",
+        summary.generator_count,
+        summary.differential_term_count,
+        source.export_t,
+        source.checkpoint.display(),
+        output.display()
+    );
+    println!(
+        "format={} version={}",
+        sharded_io::MINIMAL_RESOLUTION_JSONL_FORMAT,
+        sharded_io::MINIMAL_RESOLUTION_JSONL_VERSION,
+    );
+    Ok(())
+}
+
+struct CheckpointExportSource {
+    checkpoint: PathBuf,
+    manifest: sharded_io::ShardedManifest,
+    export_t: usize,
+}
+
+fn checkpoint_export_source(args: &[String]) -> Result<CheckpointExportSource, String> {
     let requested_t = parse_usize_flag(args, "--t")?;
     let checkpoint = if let Some(path) = parse_string_flag(args, "--checkpoint")? {
         PathBuf::from(path)
@@ -1249,24 +1290,11 @@ fn export_cmd(args: &[String]) -> Result<(), String> {
             export_t
         ));
     }
-
-    let output = parse_string_flag_any(args, &["--output", "--out"])?
-        .map(PathBuf::from)
-        .unwrap_or_else(|| default_csv_output_path(export_t));
-    ensure_output_path_is_free(&output, has_flag(args, "--overwrite"))?;
-    let rows = sharded_io::export_sharded_generators_csv(&checkpoint, export_t, &output)?;
-    println!(
-        "exported {} nonzero bidegree ranks with t <= {} from {} to {}",
-        rows,
+    Ok(CheckpointExportSource {
+        checkpoint,
+        manifest,
         export_t,
-        checkpoint.display(),
-        output.display()
-    );
-    println!(
-        "checkpoint completed full layers t <= {}",
-        manifest.completed_internal_degree
-    );
-    Ok(())
+    })
 }
 
 fn checkpoint_cmd(args: &[String]) -> Result<(), String> {
@@ -1289,7 +1317,7 @@ fn checkpoint_cmd(args: &[String]) -> Result<(), String> {
 
 fn checkpoint_init_cmd(args: &[String]) -> Result<(), String> {
     validate_flags(args, CHECKPOINT_INIT_FLAGS)?;
-    let out = parse_string_flag_any(args, &["--out", "--output"])?
+    let out = parse_string_flag(args, "--out")?
         .ok_or_else(|| "checkpoint init needs --out DIR".to_string())?;
     let overwrite = has_flag(args, "--overwrite");
     let resolution = Resolution::new(0);
@@ -1319,7 +1347,7 @@ fn checkpoint_init_cmd(args: &[String]) -> Result<(), String> {
 
 fn checkpoint_verify_cmd(args: &[String]) -> Result<(), String> {
     validate_flags(args, CHECKPOINT_VERIFY_FLAGS)?;
-    let checkpoint = parse_string_flag_any(args, &["--checkpoint", "--input"])?
+    let checkpoint = parse_string_flag(args, "--checkpoint")?
         .ok_or_else(|| "checkpoint verify needs --checkpoint DIR".to_string())?;
     let dir = Path::new(&checkpoint);
     let report = sharded_io::verify_sharded_checkpoint(dir)?;
@@ -1377,7 +1405,7 @@ fn detailed_subalgebras_cmd(args: &[String]) -> Result<(), String> {
         ));
     }
 
-    if let Some(output) = parse_string_flag_any(args, &["--output", "--out"])?.map(PathBuf::from) {
+    if let Some(output) = parse_string_flag(args, "--output")?.map(PathBuf::from) {
         if let Some(parent) = output
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
@@ -1417,24 +1445,15 @@ fn parse_usize_flag(args: &[String], flag: &str) -> Result<Option<usize>, String
 }
 
 fn parse_string_flag(args: &[String], flag: &str) -> Result<Option<String>, String> {
-    parse_string_flag_any(args, &[flag])
-}
-
-fn parse_string_flag_any(args: &[String], flags: &[&str]) -> Result<Option<String>, String> {
     let mut found = None;
     for (i, arg) in args.iter().enumerate() {
-        if flags.iter().any(|flag| arg == flag) {
+        if arg == flag {
             let value = args
                 .get(i + 1)
-                .ok_or_else(|| format!("{} needs a value", flags.join("/")))?;
+                .ok_or_else(|| format!("{flag} needs a value"))?;
             found = Some(value.clone());
-        } else {
-            for flag in flags {
-                let prefix = format!("{flag}=");
-                if let Some(value) = arg.strip_prefix(&prefix) {
-                    found = Some(value.to_string());
-                }
-            }
+        } else if let Some(value) = arg.strip_prefix(&format!("{flag}=")) {
+            found = Some(value.to_string());
         }
     }
     Ok(found)
@@ -1458,12 +1477,7 @@ enum FlagKind {
 
 const COMPUTE_FLAGS: &[(&str, FlagKind)] = &[
     ("--t", FlagKind::Value),
-    ("--show-differentials", FlagKind::Bool),
-    ("--show-steps", FlagKind::Bool),
-    ("--print-report", FlagKind::Bool),
     ("--verbose", FlagKind::Bool),
-    ("--output", FlagKind::Value),
-    ("--out", FlagKind::Value),
     ("--checkpoint", FlagKind::Value),
     ("--load-checkpoint", FlagKind::Value),
     ("--save-checkpoint", FlagKind::Value),
@@ -1496,14 +1510,12 @@ const EXPORT_FLAGS: &[(&str, FlagKind)] = &[
     ("--t", FlagKind::Value),
     ("--checkpoint", FlagKind::Value),
     ("--output", FlagKind::Value),
-    ("--out", FlagKind::Value),
     ("--overwrite", FlagKind::Bool),
     ("-h", FlagKind::Bool),
     ("--help", FlagKind::Bool),
 ];
 
 const CHECKPOINT_INIT_FLAGS: &[(&str, FlagKind)] = &[
-    ("--output", FlagKind::Value),
     ("--out", FlagKind::Value),
     ("--overwrite", FlagKind::Bool),
     ("-h", FlagKind::Bool),
@@ -1511,7 +1523,6 @@ const CHECKPOINT_INIT_FLAGS: &[(&str, FlagKind)] = &[
 ];
 
 const CHECKPOINT_VERIFY_FLAGS: &[(&str, FlagKind)] = &[
-    ("--input", FlagKind::Value),
     ("--checkpoint", FlagKind::Value),
     ("-h", FlagKind::Bool),
     ("--help", FlagKind::Bool),
@@ -1519,7 +1530,6 @@ const CHECKPOINT_VERIFY_FLAGS: &[(&str, FlagKind)] = &[
 
 const DETAILED_SUBALGEBRAS_FLAGS: &[(&str, FlagKind)] = &[
     ("--output", FlagKind::Value),
-    ("--out", FlagKind::Value),
     ("-h", FlagKind::Bool),
     ("--help", FlagKind::Bool),
 ];
@@ -1607,8 +1617,11 @@ Commands:
   checkpoint verify --checkpoint DIR
       Verify checkpoint structure and generator references.
 
-  export [--t N] [--checkpoint DIR] [--output FILE] [--overwrite]
+  export-bidegree-ranks [--t N] [--checkpoint DIR] [--output FILE] [--overwrite]
       Export one row per nonzero (s,t) to CSV, with columns s,t,rank.
+
+  export-resolution [--t N] [--checkpoint DIR] [--output FILE] [--overwrite]
+      Export all generators and differentials to versioned JSON Lines.
 
   detailed-subalgebras [--output FILE]
       Print coverage information for the bundled detailed Ext_B tables.
@@ -1638,9 +1651,6 @@ Core options:
   --save-checkpoint DIR        Write a separate checkpoint
   --no-checkpoint              Do not read or write a checkpoint
   --fresh                      Ignore an existing checkpoint and start over
-  --output FILE, --out FILE    Write a human-readable report
-  --show-differentials         Include differentials in the report
-  --show-steps                 Print individual calculation steps
 
 Default output paths:
   checkpoint/tN.checkpoint     Checkpoint for a computation through --t N
@@ -1676,7 +1686,6 @@ Fixed-t batch tuning:
   --allow-full-naive-batch
 
 Other:
-  --print-report
   --verbose                    Print detailed runtime diagnostics
   -h, --help
 "
@@ -1748,6 +1757,39 @@ mod cli_tests {
         assert!(validate_flags(&args(&["--t", "20"]), COMPUTE_FLAGS).is_ok());
         assert!(validate_flags(&args(&["--max-t", "20"]), COMPUTE_FLAGS).is_err());
         assert!(validate_flags(&args(&["--max-s", "10"]), COMPUTE_FLAGS).is_err());
+    }
+
+    #[test]
+    fn compute_rejects_removed_plain_text_report_options() {
+        for option in [
+            "--output",
+            "--out",
+            "--show-differentials",
+            "--show-steps",
+            "--print-report",
+        ] {
+            assert!(validate_flags(&args(&[option]), COMPUTE_FLAGS).is_err());
+        }
+    }
+
+    #[test]
+    fn public_commands_reject_removed_flag_aliases() {
+        assert!(validate_flags(&args(&["--out", "file"]), EXPORT_FLAGS).is_err());
+        assert!(validate_flags(&args(&["--output", "dir"]), CHECKPOINT_INIT_FLAGS).is_err());
+        assert!(validate_flags(&args(&["--input", "dir"]), CHECKPOINT_VERIFY_FLAGS).is_err());
+        assert!(validate_flags(&args(&["--out", "file"]), DETAILED_SUBALGEBRAS_FLAGS).is_err());
+    }
+
+    #[test]
+    fn default_export_paths_distinguish_ranks_and_resolution() {
+        assert_eq!(
+            default_rank_output_path(100),
+            PathBuf::from("rank_output/t100.csv")
+        );
+        assert_eq!(
+            default_resolution_output_path(100),
+            PathBuf::from("resolution_output/t100.jsonl")
+        );
     }
 
     #[test]

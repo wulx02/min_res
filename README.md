@@ -124,44 +124,89 @@ output paths:
 
 ## Export results
 
+Checkpoints are optimized for saving and resuming a calculation. They are not
+the public data format. Two read-only export commands provide distinct views
+of a completed checkpoint.
+
+### Bidegree ranks
+
 Export one row per nonzero `(s, t)` to CSV, with columns `s,t,rank`:
 
 ```bash
-./target/release/ext export \
+./target/release/ext export-bidegree-ranks \
   --t 140
 ```
 
-This reads `checkpoint/t140.checkpoint` and writes `csv_output/t140.csv`,
-creating `csv_output` automatically. With neither `--t` nor `--checkpoint`,
-`export` uses the latest default checkpoint. Use `--overwrite` to replace an
-existing CSV.
+This reads `checkpoint/t140.checkpoint` and writes `rank_output/t140.csv`,
+creating `rank_output` automatically. With neither `--t` nor `--checkpoint`,
+the latest default checkpoint is used.
 
-For explicitly named paths:
+For an explicitly named checkpoint or output file:
 
 ```bash
-./target/release/ext export \
+./target/release/ext export-bidegree-ranks \
   --checkpoint runs/local/t140.checkpoint \
   --output runs/local/basis_t140.csv
 ```
 
-To write a human-readable generator report directly from a calculation, use
-`--output FILE`. Add `--show-differentials` when the differentials are also
-needed. The report path does not change the default checkpoint path.
+### Complete minimal resolution
+
+Export every generator and differential to versioned JSON Lines:
 
 ```bash
-./target/release/ext compute \
-  --t 120 \
-  --checkpoint runs/local/t120.checkpoint \
-  --output runs/local/resolution_t120.txt
+./target/release/ext export-resolution \
+  --t 140
 ```
+
+This reads `checkpoint/t140.checkpoint` and writes
+`resolution_output/t140.jsonl`, creating `resolution_output` automatically.
+The checkpoint is only read; it is not rewritten.
+
+The JSONL file is a readable exchange export, not a resumable checkpoint.
+Because it stores JSON field names, generator names, and array structure, it
+can be substantially larger than the packed binary checkpoint. Keep the binary
+checkpoint for resuming a calculation, and generate JSONL when you need to
+inspect or share the complete resolution.
+
+The first line is a metadata record containing the format name, format
+version, coefficient field, basis, range, record counts, and checkpoint
+provenance. Every remaining line is one generator. A `t=100` export begins:
+
+```json
+{"record_type":"metadata","format":"ext-minimal-resolution-jsonl","format_version":1,"prime":2,"coefficient_field":"F2","algebra":"mod-2 Steenrod algebra","basis":"Milnor","max_internal_degree":100,"generator_count":1246,"differential_term_count":436836,"rank_convention":"rank(s,t) is the number of minimal generators in bidegree (s,t), equal to dim_F2 Ext_A^{s,t}(F2,F2)","source_checkpoint":{"format":"NMR_SHARDED_V1","format_version":1,"completed_internal_degree":100,"source_git_commit":"637757581d2b"}}
+{"record_type":"generator","format_version":1,"id":0,"name":"g0","s":0,"t":0,"stem":0,"differential":[]}
+{"record_type":"generator","format_version":1,"id":1,"name":"g1_1_1","s":1,"t":1,"stem":0,"differential":[{"target_id":0,"target_name":"g0","milnor":[1]}]}
+```
+
+Here `milnor: [4,1]` denotes the Milnor basis element `Sq(4,1)`. An empty
+array denotes the unit. The `differential` array is summed over `F2`.
+The name `g1_1_1` encodes `g{s}_{t}_{id}` with `s=1`, `t=1`, and global
+generator ID `1`. Generator IDs and names are stable within the exported
+checkpoint.
+
+The v1 record definition is
+[`schema/minimal-resolution-v1.schema.json`](schema/minimal-resolution-v1.schema.json).
+Consumers should check the metadata `format` and `format_version` before
+reading generator records.
+
+For explicitly named paths:
+
+```bash
+./target/release/ext export-resolution \
+  --checkpoint runs/local/t140.checkpoint \
+  --output runs/local/minimal_resolution_t140.jsonl
+```
+
+Both export commands refuse to replace an existing output unless
+`--overwrite` is supplied.
 
 ## Scope and limitations
 
 - The implementation is for the prime `2` only.
 - The command-line interface computes the resolution of the trivial module
   `F2`; it is not currently a general module-resolution library.
-- Checkpoints should be treated as versioned computational artifacts. Keep the
-  program version and command metadata with any checkpoint you distribute.
+- Checkpoints should be treated as computational artifacts for this program.
+  Use `export-resolution` when distributing complete minimal-resolution data.
 
 ## Development checks
 

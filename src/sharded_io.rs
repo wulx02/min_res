@@ -16,6 +16,8 @@ use crate::resolution::{ComputeCursor, Generator, ModuleTerm, Resolution, Resolu
 
 pub const SHARDED_CHECKPOINT_FORMAT: &str = "NMR_SHARDED_V1";
 pub const SHARDED_DELTA_FORMAT: &str = "NMR_DELTA_SHARDED_V1";
+pub const MINIMAL_RESOLUTION_JSONL_FORMAT: &str = "ext-minimal-resolution-jsonl";
+pub const MINIMAL_RESOLUTION_JSONL_VERSION: u32 = 1;
 const FORMAT_VERSION: u32 = 1;
 const GEN_META_FILE: &str = "gen_meta.pack";
 const DIFF_TERMS_FILE: &str = "diff_terms.pack";
@@ -79,6 +81,55 @@ pub struct ShardedVerifyReport {
     pub total_differential_term_count: usize,
     pub q_block_count: usize,
     pub max_homological_degree: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResolutionJsonlExportSummary {
+    pub generator_count: usize,
+    pub differential_term_count: usize,
+}
+
+#[derive(Serialize)]
+struct ResolutionJsonlMetadata<'a> {
+    record_type: &'static str,
+    format: &'static str,
+    format_version: u32,
+    prime: u8,
+    coefficient_field: &'static str,
+    algebra: &'static str,
+    basis: &'static str,
+    max_internal_degree: usize,
+    generator_count: usize,
+    differential_term_count: usize,
+    rank_convention: &'static str,
+    source_checkpoint: ResolutionJsonlCheckpoint<'a>,
+}
+
+#[derive(Serialize)]
+struct ResolutionJsonlCheckpoint<'a> {
+    format: &'a str,
+    format_version: u32,
+    completed_internal_degree: usize,
+    source_git_commit: Option<&'a str>,
+}
+
+#[derive(Serialize)]
+struct ResolutionJsonlGenerator {
+    record_type: &'static str,
+    format_version: u32,
+    id: usize,
+    name: String,
+    s: usize,
+    t: usize,
+    stem: usize,
+    differential: Vec<ResolutionJsonlDifferentialTerm>,
+}
+
+#[derive(Serialize)]
+struct ResolutionJsonlDifferentialTerm {
+    target_id: usize,
+    target_name: String,
+    milnor: Vec<u32>,
 }
 
 #[derive(Clone, Debug)]
@@ -300,6 +351,156 @@ pub fn export_sharded_generators_csv(
         )
     })?;
     Ok(counts.len())
+}
+
+pub fn export_minimal_resolution_jsonl(
+    checkpoint_dir: &Path,
+    max_t: usize,
+    output: &Path,
+) -> Result<ResolutionJsonlExportSummary, String> {
+    let manifest = read_manifest(checkpoint_dir)?;
+    ensure_format(&manifest, SHARDED_CHECKPOINT_FORMAT, checkpoint_dir)?;
+    if max_t > manifest.completed_internal_degree {
+        return Err(format!(
+            "checkpoint {} is complete only through t={}, so it cannot export t={max_t}",
+            checkpoint_dir.display(),
+            manifest.completed_internal_degree,
+        ));
+    }
+
+    let all_qs = (0..=manifest.max_homological_degree).collect::<BTreeSet<_>>();
+    let loaded = load_sparse_snapshot(checkpoint_dir, &[], &all_qs, &all_qs)?;
+    let mut generators = loaded.snapshot.generators;
+    generators.sort_by_key(|generator| generator.id);
+
+    let names = generators
+        .iter()
+        .map(|generator| (generator.id, exported_generator_name(generator)))
+        .collect::<BTreeMap<_, _>>();
+    let selected = generators
+        .iter()
+        .filter(|generator| generator.t <= max_t)
+        .collect::<Vec<_>>();
+    let differential_term_count = selected
+        .iter()
+        .map(|generator| generator.differential.len())
+        .sum();
+    let summary = ResolutionJsonlExportSummary {
+        generator_count: selected.len(),
+        differential_term_count,
+    };
+
+    if let Some(parent) = output
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "failed to create minimal-resolution export directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+    let file_name = output
+        .file_name()
+        .ok_or_else(|| format!("invalid JSONL output path {}", output.display()))?
+        .to_string_lossy();
+    let tmp_path = output.with_file_name(format!("{file_name}.tmp"));
+    let mut writer = BufWriter::new(File::create(&tmp_path).map_err(|error| {
+        format!(
+            "failed to create temporary JSONL export {}: {error}",
+            tmp_path.display()
+        )
+    })?);
+
+    let metadata = ResolutionJsonlMetadata {
+        record_type: "metadata",
+        format: MINIMAL_RESOLUTION_JSONL_FORMAT,
+        format_version: MINIMAL_RESOLUTION_JSONL_VERSION,
+        prime: 2,
+        coefficient_field: "F2",
+        algebra: "mod-2 Steenrod algebra",
+        basis: "Milnor",
+        max_internal_degree: max_t,
+        generator_count: summary.generator_count,
+        differential_term_count: summary.differential_term_count,
+        rank_convention: "rank(s,t) is the number of minimal generators in bidegree (s,t), equal to dim_F2 Ext_A^{s,t}(F2,F2)",
+        source_checkpoint: ResolutionJsonlCheckpoint {
+            format: &manifest.format_name,
+            format_version: manifest.format_version,
+            completed_internal_degree: manifest.completed_internal_degree,
+            source_git_commit: manifest.source_git_commit.as_deref(),
+        },
+    };
+    write_jsonl_record(&mut writer, &metadata)?;
+
+    for generator in selected {
+        let stem = generator.t.checked_sub(generator.s).ok_or_else(|| {
+            format!(
+                "cannot export generator {} with s={} greater than t={}",
+                generator.id, generator.s, generator.t
+            )
+        })?;
+        let differential = generator
+            .differential
+            .iter()
+            .map(|term| {
+                let target_name = names.get(&term.generator).cloned().ok_or_else(|| {
+                    format!(
+                        "generator {} differential references missing generator {}",
+                        generator.id, term.generator
+                    )
+                })?;
+                Ok(ResolutionJsonlDifferentialTerm {
+                    target_id: term.generator,
+                    target_name,
+                    milnor: Milnor::from_packed(term.coeff_packed).entries().to_vec(),
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let record = ResolutionJsonlGenerator {
+            record_type: "generator",
+            format_version: MINIMAL_RESOLUTION_JSONL_VERSION,
+            id: generator.id,
+            name: names[&generator.id].clone(),
+            s: generator.s,
+            t: generator.t,
+            stem,
+            differential,
+        };
+        write_jsonl_record(&mut writer, &record)?;
+    }
+
+    writer.flush().map_err(|error| {
+        format!(
+            "failed to flush JSONL export {}: {error}",
+            tmp_path.display()
+        )
+    })?;
+    fs::rename(&tmp_path, output).map_err(|error| {
+        format!(
+            "failed to replace JSONL export {} with {}: {error}",
+            output.display(),
+            tmp_path.display()
+        )
+    })?;
+    Ok(summary)
+}
+
+fn exported_generator_name(generator: &Generator) -> String {
+    if generator.id == 0 {
+        "g0".to_string()
+    } else {
+        format!("g{}_{}_{}", generator.s, generator.t, generator.id)
+    }
+}
+
+fn write_jsonl_record(writer: &mut impl Write, record: &impl Serialize) -> Result<(), String> {
+    serde_json::to_writer(&mut *writer, record)
+        .map_err(|error| format!("failed to encode minimal-resolution JSONL record: {error}"))?;
+    writer
+        .write_all(b"\n")
+        .map_err(|error| format!("failed to write minimal-resolution JSONL record: {error}"))
 }
 
 // Manifest provenance is intentionally explicit at this serialization
@@ -1335,6 +1536,73 @@ mod tests {
         assert_eq!(rows, 1);
         assert!(text.contains("s,t,rank\n"));
         assert!(text.contains("0,0,1\n"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn minimal_resolution_jsonl_is_versioned_and_contains_differentials() {
+        let root = fresh_test_root("minimal_resolution_jsonl");
+        let checkpoint = root.join("t4.checkpoint");
+        let jsonl = root.join("t4.jsonl");
+        let mut resolution = Resolution::new(4);
+        resolution
+            .compute(4, crate::resolution::ComputeMode::Naive)
+            .unwrap();
+        write_sharded_checkpoint(
+            &checkpoint,
+            &resolution,
+            ComputeCursor {
+                next_t: 5,
+                next_s: 0,
+            },
+            None,
+            Some("test-commit".to_string()),
+            false,
+        )
+        .unwrap();
+
+        let summary = export_minimal_resolution_jsonl(&checkpoint, 4, &jsonl).unwrap();
+        let lines = fs::read_to_string(&jsonl)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(lines.len(), summary.generator_count + 1);
+
+        let metadata = &lines[0];
+        assert_eq!(metadata["record_type"], "metadata");
+        assert_eq!(metadata["format"], MINIMAL_RESOLUTION_JSONL_FORMAT);
+        assert_eq!(metadata["format_version"], MINIMAL_RESOLUTION_JSONL_VERSION);
+        assert_eq!(metadata["generator_count"], summary.generator_count);
+        assert_eq!(
+            metadata["differential_term_count"],
+            summary.differential_term_count
+        );
+        assert_eq!(
+            metadata["source_checkpoint"]["source_git_commit"],
+            "test-commit"
+        );
+
+        assert_eq!(lines[1]["record_type"], "generator");
+        assert_eq!(lines[1]["name"], "g0");
+        assert!(lines[1]["differential"].as_array().unwrap().is_empty());
+        let nonzero_differential = lines[1..]
+            .iter()
+            .find(|record| !record["differential"].as_array().unwrap().is_empty())
+            .expect("expected a nonzero differential in t <= 4");
+        let first_term = &nonzero_differential["differential"][0];
+        assert!(first_term["target_id"].is_u64());
+        assert!(first_term["target_name"].is_string());
+        assert!(first_term["milnor"].is_array());
+
+        let schema: serde_json::Value =
+            serde_json::from_str(include_str!("../schema/minimal-resolution-v1.schema.json"))
+                .unwrap();
+        assert_eq!(
+            schema["$schema"],
+            "https://json-schema.org/draft/2020-12/schema"
+        );
 
         let _ = fs::remove_dir_all(root);
     }

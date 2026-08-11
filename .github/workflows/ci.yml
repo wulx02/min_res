@@ -60,6 +60,21 @@ jobs:
           test -d checkpoint/t14.checkpoint
           "$binary" checkpoint verify \
             --checkpoint "$smoke_dir/checkpoint/t14.checkpoint"
-          "$binary" export --t 14
-          test -f csv_output/t14.csv
-          test "$(head -n 1 csv_output/t14.csv)" = 's,t,rank'
+          "$binary" export-bidegree-ranks --t 14
+          test -f rank_output/t14.csv
+          test "$(head -n 1 rank_output/t14.csv)" = 's,t,rank'
+          "$binary" export-resolution --t 14
+          test -f resolution_output/t14.jsonl
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          records = [json.loads(line) for line in Path("resolution_output/t14.jsonl").read_text().splitlines()]
+          metadata = records[0]
+          assert metadata["record_type"] == "metadata"
+          assert metadata["format"] == "ext-minimal-resolution-jsonl"
+          assert metadata["format_version"] == 1
+          assert metadata["generator_count"] == len(records) - 1
+          assert all(record["record_type"] == "generator" for record in records[1:])
+          assert any(record["differential"] for record in records[1:])
+          PY

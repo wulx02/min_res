@@ -265,14 +265,6 @@ pub fn set_allocator_relief_enabled(enabled: bool) {
     ALLOCATOR_RELIEF_ENABLED.store(enabled, Ordering::Relaxed);
 }
 
-#[derive(Clone, Debug)]
-struct StepLog {
-    s: usize,
-    t: usize,
-    method: String,
-    added: usize,
-}
-
 #[derive(Clone, Copy, Debug, Default)]
 struct SignatureSolveTiming {
     solver_lookup_s: f64,
@@ -362,7 +354,6 @@ pub struct Resolution {
     fixed_t_previous_task_micros: Option<(usize, HashMap<usize, u128>)>,
     fixed_t_previous_group_ranges: Option<(usize, Vec<(usize, usize)>)>,
     fixed_t_worker_product_caches: Vec<FixedTBatchPersistedProductCaches>,
-    step_logs: Vec<StepLog>,
     cache_policy: CachePolicy,
 }
 
@@ -785,7 +776,6 @@ impl Resolution {
             fixed_t_previous_task_micros: None,
             fixed_t_previous_group_ranges: None,
             fixed_t_worker_product_caches: Vec::new(),
-            step_logs: Vec::new(),
             cache_policy: CachePolicy::default(),
         }
     }
@@ -854,13 +844,7 @@ impl Resolution {
                 continue;
             }
 
-            let (method, added) = self.compute_step(s, t, &mode)?;
-            self.step_logs.push(StepLog {
-                s,
-                t,
-                method,
-                added,
-            });
+            self.compute_step(s, t, &mode)?;
 
             let next = ComputeCursor::after_step(t, s);
             after_step(
@@ -1340,14 +1324,6 @@ impl Resolution {
         }
         self.update_fixed_t_task_time_history(t, &results);
         self.update_fixed_t_group_range_history(t, completed_group_ranges);
-        for result in results {
-            self.step_logs.push(StepLog {
-                s: result.s,
-                t,
-                method: result.path,
-                added: result.representatives.len(),
-            });
-        }
         if detailed_logging {
             eprintln!(
                 "fixed_t_batch_commit t={t} added={added_total} validate_commit={} verify={} commit_s={:.6}",
@@ -1943,9 +1919,6 @@ impl Resolution {
             fixed_t_previous_task_micros: self.fixed_t_previous_task_micros.clone(),
             fixed_t_previous_group_ranges: self.fixed_t_previous_group_ranges.clone(),
             fixed_t_worker_product_caches: Vec::new(),
-            // Worker clones only compute isolated bidegrees and return cache deltas;
-            // copying the historical step log adds per-worker overhead with no use.
-            step_logs: Vec::new(),
             cache_policy: self.cache_policy,
         }
     }
@@ -2882,13 +2855,7 @@ impl Resolution {
                 .iter()
                 .map(|ids| ids.capacity() * std::mem::size_of::<usize>())
                 .sum::<usize>();
-        let step_log_bytes = self.step_logs.capacity() * std::mem::size_of::<StepLog>()
-            + self
-                .step_logs
-                .iter()
-                .map(|step| step.method.capacity())
-                .sum::<usize>();
-        algebra_basis_bytes + generator_bytes + gens_by_s_bytes + step_log_bytes
+        algebra_basis_bytes + generator_bytes + gens_by_s_bytes
     }
 
     fn log_memory_cache_estimate(&self, phase: &str, s: usize, t: usize) {
@@ -3268,84 +3235,6 @@ impl Resolution {
         };
         let boundary_domain = self.basis_signature_dim(s + 1, t, &subalgebra, 0);
         (Some(domain), Some(target), Some(boundary_domain))
-    }
-
-    pub fn report(&self, max_t: usize, show_differentials: bool, show_steps: bool) -> String {
-        let mut out = String::new();
-        out.push_str("Minimal resolution over the mod-2 Steenrod algebra\n");
-        out.push_str("Basis: Milnor Sq(R). Coefficients: F2.\n\n");
-        out.push_str("Generators G_s,t. These are dual to Ext_A^{s,t}(F2,F2).\n");
-        out.push_str("When Algorithm 2 is selected, each Algorithm 2 step uses the named subalgebra and its signature filtration; low bidegrees outside the lower-line range are marked as bootstrap-naive unless --strict was used.\n\n");
-        out.push_str(&self.step_summary());
-        out.push('\n');
-        out.push_str("s  t  stem  count  generators\n");
-
-        for s in 0..=max_t {
-            let mut by_t = HashMap::<usize, Vec<&Generator>>::default();
-            for &id in self.gens_by_s.get(s).into_iter().flatten() {
-                let generator = &self.generators[id];
-                if generator.t <= max_t {
-                    by_t.entry(generator.t).or_default().push(generator);
-                }
-            }
-            let mut degrees = by_t.keys().copied().collect::<Vec<_>>();
-            degrees.sort_unstable();
-            for t in degrees {
-                let gens = &by_t[&t];
-                let names = gens
-                    .iter()
-                    .map(|g| self.generator_name(g.id))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let stem = t as isize - s as isize;
-                out.push_str(&format!(
-                    "{s:<2} {t:<2} {stem:<5} {:<5} {names}\n",
-                    gens.len()
-                ));
-            }
-        }
-
-        if show_steps {
-            out.push_str("\nComputation steps\n");
-            for step in &self.step_logs {
-                if step.t <= max_t {
-                    out.push_str(&format!(
-                        "(s,t)=({},{})  {:<48} added {}\n",
-                        step.s, step.t, step.method, step.added
-                    ));
-                }
-            }
-        }
-
-        if show_differentials {
-            out.push_str("\nDifferentials\n");
-            for generator in &self.generators {
-                if generator.id == 0 || generator.t > max_t {
-                    continue;
-                }
-                out.push_str(&format!(
-                    "d({}) = {}\n",
-                    self.generator_name(generator.id),
-                    self.format_terms(&generator.differential)
-                ));
-            }
-        }
-        out
-    }
-
-    fn step_summary(&self) -> String {
-        if self.step_logs.is_empty() {
-            return String::new();
-        }
-        let mut counts = BTreeMap::<&str, usize>::new();
-        for step in &self.step_logs {
-            *counts.entry(step.method.as_str()).or_default() += 1;
-        }
-        let mut out = String::from("Step summary\n");
-        for (method, count) in counts {
-            out.push_str(&format!("  {method}: {count}\n"));
-        }
-        out
     }
 
     fn step_naive(&mut self, s: usize, t: usize) -> Result<usize, String> {
@@ -5509,27 +5398,6 @@ impl Resolution {
                 ),
             );
         }
-    }
-
-    fn format_terms(&self, terms: &[ModuleTerm]) -> String {
-        if terms.is_empty() {
-            return "0".to_string();
-        }
-        terms
-            .iter()
-            .map(|term| {
-                if term.coeff_packed == 0 {
-                    self.generator_name(term.generator)
-                } else {
-                    format!(
-                        "{} {}",
-                        Milnor::from_packed(term.coeff_packed),
-                        self.generator_name(term.generator)
-                    )
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(" + ")
     }
 
     fn format_vector(&self, s: usize, t: usize, vector: &BitVec) -> String {
@@ -8112,13 +7980,6 @@ mod tests {
                 generator: 0,
             }],
         );
-        resolution.step_logs.push(StepLog {
-            s: 0,
-            t: 0,
-            method: "test-log".to_string(),
-            added: 0,
-        });
-
         let cloned = resolution.clone_with_shared_worker_caches();
 
         assert!(Arc::ptr_eq(
@@ -8137,7 +7998,6 @@ mod tests {
             cloned.mult_e0_empty_cache.policy,
             E0EmptyCachePolicy::CompactSegments
         );
-        assert!(cloned.step_logs.is_empty());
     }
 
     #[test]
