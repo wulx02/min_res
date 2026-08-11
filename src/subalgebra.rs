@@ -9,9 +9,11 @@ use std::{
 };
 
 use crate::fast_hash::FastHashMap as HashMap;
+#[cfg(test)]
+use crate::milnor::basis_of_degree;
 use crate::milnor::{
-    CoeffKey, Milnor, PACKED_ENTRY_LIMIT, basis_of_degree, pack_padded_entries,
-    pack_padded_entries_unchecked, packed_entry, tau_a, weight,
+    CoeffKey, Milnor, PACKED_ENTRY_LIMIT, pack_padded_entries, pack_padded_entries_unchecked,
+    packed_entry, tau_a, weight,
 };
 use serde::Deserialize;
 
@@ -164,14 +166,9 @@ const DETAILED_FINITE_SUBALGEBRAS: &[DetailedFiniteSubalgebraSpec] = &[
 ];
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub struct SubalgebraApplicability {
-    pub algebra_name: String,
     pub usable: bool,
     pub certification_source: &'static str,
-    pub candidate_status: String,
-    pub window_lo: usize,
-    pub window_hi: Option<usize>,
     pub blocking_reason: Option<&'static str>,
 }
 
@@ -278,17 +275,17 @@ impl Subalgebra {
         Self::from_profile(Family::A, n, None, profile, bit_order, None)
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn b3211() -> Result<Self, String> {
         Self::b_profile("B3211", vec![3, 2, 1, 1])
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn b3221() -> Result<Self, String> {
         Self::b_profile("B3221", vec![3, 2, 2, 1])
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn b3321() -> Result<Self, String> {
         Self::b_profile("B3321", vec![3, 3, 2, 1])
     }
@@ -472,11 +469,6 @@ impl Subalgebra {
         )
     }
 
-    #[allow(dead_code)]
-    pub fn n(&self) -> usize {
-        self.n
-    }
-
     pub fn signatures(&self) -> &[Milnor] {
         &self.signatures
     }
@@ -494,7 +486,7 @@ impl Subalgebra {
         &self.profile
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn profile_dim(&self) -> usize {
         let exponent = self
             .profile
@@ -592,14 +584,14 @@ impl Subalgebra {
         ))
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn split_signature_packed(&self, x: CoeffKey) -> Option<(CoeffKey, CoeffKey)> {
         let signature = self.signature_packed(x);
         let quotient = self.quotient_part_packed(x)?;
         Some((signature, quotient))
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn quotient_part_packed(&self, x: CoeffKey) -> Option<CoeffKey> {
         let signature = self.signature_packed(x);
         let mut quotient = [0_u32; PACKED_ENTRY_LIMIT];
@@ -611,7 +603,7 @@ impl Subalgebra {
         pack_padded_entries(&quotient)
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn compose_signature_with_quotient_packed(
         &self,
         sig: CoeffKey,
@@ -626,22 +618,17 @@ impl Subalgebra {
             .then_some(packed)
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn signature_is_zero_packed(&self, x: CoeffKey) -> bool {
         self.signature_packed(x) == 0
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn same_signature_packed(&self, x: CoeffKey, sig: CoeffKey) -> bool {
         self.signature_packed(x) == sig
     }
 
-    #[allow(dead_code)]
-    pub fn signature_degree_packed(&self, sig: CoeffKey) -> usize {
-        Milnor::from_packed(sig).degree()
-    }
-
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn quotient_basis(&self, degree: usize) -> Vec<CoeffKey> {
         basis_of_degree(degree)
             .into_iter()
@@ -650,12 +637,12 @@ impl Subalgebra {
             .collect()
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn quotient_count(&self, degree: usize) -> usize {
         self.quotient_basis(degree).len()
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn profile_quotient_packed(&self, x: CoeffKey) -> Option<CoeffKey> {
         self.profile_cache_key()?;
         Some(self.profile_quotient_packed_unchecked(x))
@@ -693,12 +680,6 @@ impl Subalgebra {
         true
     }
 
-    #[allow(dead_code)]
-    pub fn attach_profile_signature_packed(&self, sig: CoeffKey, x: CoeffKey) -> Option<CoeffKey> {
-        self.profile_cache_key()?;
-        self.attach_profile_signature_packed_unchecked(sig, x)
-    }
-
     pub fn attach_profile_signature_packed_unchecked(
         &self,
         sig: CoeffKey,
@@ -716,7 +697,7 @@ impl Subalgebra {
         pack_padded_entries(&out)
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn signature(&self, x: &Milnor) -> Milnor {
         let entries = match self.family {
             Family::A | Family::B | Family::F => (0..self.profile.len())
@@ -750,7 +731,7 @@ impl Subalgebra {
         Milnor::new(entries)
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn signature_index(&self, x: &Milnor) -> usize {
         let packed = x
             .packed()
@@ -896,15 +877,6 @@ impl Subalgebra {
             }
         }
     }
-
-    #[allow(dead_code)]
-    pub fn debug_order(&self) -> String {
-        self.bit_order
-            .iter()
-            .map(|(j, bit)| format!("P{}_{}", j, bit))
-            .collect::<Vec<_>>()
-            .join(" > ")
-    }
 }
 
 fn a2_condition_mode() -> A2ConditionMode {
@@ -1016,16 +988,8 @@ fn original_applicability(subalgebra: &Subalgebra, s: usize, t: usize) -> Subalg
         "unavailable_data"
     };
     SubalgebraApplicability {
-        algebra_name: subalgebra.name(),
         usable,
         certification_source: source,
-        candidate_status: if usable {
-            format!("usable:{source}")
-        } else {
-            "blocked:old_rule_failed".to_string()
-        },
-        window_lo: 0,
-        window_hi: None,
         blocking_reason: (!usable).then_some("old_rule_failed"),
     }
 }
@@ -1096,12 +1060,8 @@ fn detailed_table_applicability(
     let (window_lo, window_hi) = detailed_applicability_window(t, spec.tau);
     let Some(window_hi_value) = window_hi else {
         return SubalgebraApplicability {
-            algebra_name: spec.name.to_string(),
             usable: true,
             certification_source: "detailed_ext_table",
-            candidate_status: "usable:detailed_ext_table".to_string(),
-            window_lo,
-            window_hi,
             blocking_reason: None,
         };
     };
@@ -1111,23 +1071,15 @@ fn detailed_table_applicability(
             ExtQuery::KnownZero => {}
             ExtQuery::KnownNonzero(_) => {
                 return SubalgebraApplicability {
-                    algebra_name: spec.name.to_string(),
                     usable: false,
                     certification_source: "detailed_ext_table",
-                    candidate_status: "blocked:nonzero_Ext_row_s".to_string(),
-                    window_lo,
-                    window_hi,
                     blocking_reason: Some("nonzero_Ext_row_s"),
                 };
             }
             ExtQuery::Unknown => {
                 return SubalgebraApplicability {
-                    algebra_name: spec.name.to_string(),
                     usable: false,
                     certification_source: "unavailable_data",
-                    candidate_status: "blocked:unknown_out_of_range".to_string(),
-                    window_lo,
-                    window_hi,
                     blocking_reason: Some("unknown_out_of_range"),
                 };
             }
@@ -1140,23 +1092,15 @@ fn detailed_table_applicability(
             ExtQuery::KnownZero => {}
             ExtQuery::KnownNonzero(_) => {
                 return SubalgebraApplicability {
-                    algebra_name: spec.name.to_string(),
                     usable: false,
                     certification_source: "detailed_ext_table",
-                    candidate_status: "blocked:nonzero_Ext_row_s_minus_1".to_string(),
-                    window_lo,
-                    window_hi,
                     blocking_reason: Some("nonzero_Ext_row_s_minus_1"),
                 };
             }
             ExtQuery::Unknown => {
                 return SubalgebraApplicability {
-                    algebra_name: spec.name.to_string(),
                     usable: false,
                     certification_source: "unavailable_data",
-                    candidate_status: "blocked:unknown_out_of_range".to_string(),
-                    window_lo,
-                    window_hi,
                     blocking_reason: Some("unknown_out_of_range"),
                 };
             }
@@ -1164,12 +1108,8 @@ fn detailed_table_applicability(
     }
 
     SubalgebraApplicability {
-        algebra_name: spec.name.to_string(),
         usable: true,
         certification_source: "detailed_ext_table",
-        candidate_status: "usable:detailed_ext_table".to_string(),
-        window_lo,
-        window_hi,
         blocking_reason: None,
     }
 }

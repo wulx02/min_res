@@ -99,11 +99,6 @@ impl Milnor {
             .sum()
     }
 
-    #[allow(dead_code)]
-    pub fn is_one(&self) -> bool {
-        self.entries.is_empty()
-    }
-
     pub fn packed(&self) -> Option<CoeffKey> {
         pack_entries(&self.entries)
     }
@@ -206,7 +201,7 @@ fn packed_entry_mask(index: usize) -> CoeffKey {
     (1_u64 << PACKED_ENTRY_WIDTHS[index]) - 1
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn basis_through_degree(max_degree: usize) -> Vec<Vec<Milnor>> {
     (0..=max_degree).map(basis_of_degree).collect()
 }
@@ -230,7 +225,7 @@ pub fn basis_of_degree(degree: usize) -> Vec<Milnor> {
     out
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn basis_keys_of_degree(degree: usize) -> Vec<CoeffKey> {
     basis_keys_of_degree_with_capacity(degree, packed_basis_count_of_degree(degree))
 }
@@ -271,7 +266,7 @@ fn packed_basis_counts_through_degree(max_degree: usize) -> Vec<usize> {
     counts
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 fn packed_basis_count_of_degree(degree: usize) -> usize {
     packed_basis_counts_through_degree(degree)[degree]
 }
@@ -368,7 +363,7 @@ pub fn multiply_packed_with_row_cache(
     multiply_packed_with_row_cache_matching(left, right, row_cache, |_| true)
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn multiply_packed_fast(left: CoeffKey, right: CoeffKey) -> Vec<CoeffKey> {
     let mut out = multiply_packed_fast_raw(left, right);
     sort_packed_mod2(&mut out);
@@ -394,6 +389,7 @@ where
     out
 }
 
+#[cfg(test)]
 pub fn multiply_packed_fast_raw(left: CoeffKey, right: CoeffKey) -> Vec<CoeffKey> {
     if left == 0 {
         return vec![right];
@@ -406,6 +402,7 @@ pub fn multiply_packed_fast_raw(left: CoeffKey, right: CoeffKey) -> Vec<CoeffKey
     out
 }
 
+#[cfg(test)]
 pub fn multiply_packed_fast_raw_for_each(
     left: CoeffKey,
     right: CoeffKey,
@@ -514,7 +511,6 @@ pub(crate) fn bounded_product_width(product_degree_bound: usize) -> usize {
     PACKED_ENTRY_LIMIT
 }
 
-#[allow(dead_code)]
 fn sort_packed_mod2(terms: &mut Vec<CoeffKey>) {
     if terms.len() < 2 {
         return;
@@ -881,7 +877,7 @@ where
     multiply_packed_keys_with_row_cache_internal(left_key, right_key, row_cache, keep, None)
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn multiply_packed_btrivial_with_row_cache<F>(
     left: &Milnor,
     right: &Milnor,

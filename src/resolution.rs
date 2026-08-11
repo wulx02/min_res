@@ -798,32 +798,12 @@ impl Resolution {
         }
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn compute(&mut self, max_t: usize, mode: ComputeMode) -> Result<(), String> {
         self.compute_from_cursor(max_t, mode, ComputeCursor::start())
             .map(|_| ())
     }
 
-    #[allow(dead_code)]
-    pub fn compute_with_progress(
-        &mut self,
-        max_t: usize,
-        mode: ComputeMode,
-        mut after_step: impl FnMut(ComputeProgress) -> Result<(), String>,
-    ) -> Result<(), String> {
-        self.compute_from_cursor_with_progress(
-            max_t,
-            mode,
-            ComputeCursor::start(),
-            |_, progress| {
-                after_step(progress)?;
-                Ok(())
-            },
-        )
-        .map(|_| ())
-    }
-
-    #[allow(dead_code)]
     pub fn compute_from_cursor(
         &mut self,
         max_t: usize,
@@ -3417,7 +3397,8 @@ impl Resolution {
         );
         let b0_time = timer.elapsed();
         let timer = Instant::now();
-        if full_differential_output_chunk_bytes().is_some() {
+        let use_streaming_output = full_differential_output_chunk_bytes().is_some();
+        if use_streaming_output {
             let d0_domain_dim = d0.domain_dim;
             let full_target_dim = if s == 0 {
                 usize::from(t == 0)
@@ -3758,349 +3739,40 @@ impl Resolution {
             return Ok(0);
         }
 
-        if full_differential_output_chunk_bytes().is_some() {
-            let full_target_dim = if s == 0 {
-                usize::from(t == 0)
-            } else {
-                self.basis_dimension_uncached(s - 1, t)
-            };
-            let output_batch_len =
-                full_differential_output_batch_len(full_target_dim, quotient.len());
-            let mut full_time = Duration::default();
-            let lift_timer = Instant::now();
-            let mut solver_cache = HashMap::<SignatureBasisKey, Arc<LinearSolver>>::default();
-            let mut completed_lifts = Vec::<Vec<ModuleTerm>>::with_capacity(quotient.len());
-            let mut initial_differential_peak_bytes = 0usize;
-
-            for (quotient_batch_index, quotient_batch) in
-                quotient.chunks(output_batch_len).enumerate()
-            {
-                #[cfg(test)]
-                INITIAL_FULL_DIFFERENTIAL_BATCH_TEST_HITS.fetch_add(1, Ordering::Relaxed);
-                let timer = Instant::now();
-                let quotient_refs = quotient_batch.iter().collect::<Vec<_>>();
-                let mut errors = self.apply_full_differentials_to_vectors(
-                    s,
-                    t,
-                    subalgebra,
-                    0,
-                    d0_domain_dim,
-                    &quotient_refs,
-                )?;
-                full_time += timer.elapsed();
-                initial_differential_peak_bytes =
-                    initial_differential_peak_bytes.max(bitvec_slice_bytes(&errors));
-
-                let mut lifts = Vec::with_capacity(quotient_batch.len());
-                for (q, error) in quotient_batch.iter().zip(errors.iter()) {
-                    let x = self.signature_vector_to_terms(s, t, subalgebra, 0, q);
-                    let initial_low_error =
-                        self.extract_signature_vector(s.saturating_sub(1), t, subalgebra, 0, error);
-                    if !initial_low_error.is_zero() {
-                        let remaining = self.format_vector(s.saturating_sub(1), t, error);
-                        return Err(format!(
-                            "internal mismatch: E0 representative at (s,t)=({s},{t}) is not an E0-cycle for {}. Full differential: {remaining}",
-                            subalgebra.name()
-                        ));
-                    }
-                    lifts.push(x);
-                }
-
-                for sig_index in 1..subalgebra.signatures().len() {
-                    let signature_timer = Instant::now();
-                    let signature_error_count = errors.len();
-                    let signature_output_batch_len =
-                        full_differential_output_batch_len(full_target_dim, signature_error_count);
-                    let mut batch_start = 0usize;
-                    let mut extract_s = 0.0;
-                    let mut has_error = false;
-                    let mut solve_timing = SignatureSolveTiming::default();
-                    let mut solve_total_s = 0.0;
-                    let mut signature_full_s = 0.0;
-                    let mut merge_s = 0.0;
-                    let mut solved_count = 0usize;
-                    let mut differential_count = 0usize;
-                    let mut differential_peak_bytes = 0usize;
-                    let mut domain_dim_seen = None::<usize>;
-
-                    while batch_start < signature_error_count {
-                        let batch_end =
-                            (batch_start + signature_output_batch_len).min(signature_error_count);
-                        let extract_timer = Instant::now();
-                        let mut signature_errors = Vec::with_capacity(batch_end - batch_start);
-                        let mut batch_has_error = false;
-                        for error in &errors[batch_start..batch_end] {
-                            let e = self.extract_signature_vector(
-                                s.saturating_sub(1),
-                                t,
-                                subalgebra,
-                                sig_index,
-                                error,
-                            );
-                            batch_has_error |= !e.is_zero();
-                            signature_errors.push(e);
-                        }
-                        extract_s += extract_timer.elapsed().as_secs_f64();
-                        if !batch_has_error {
-                            batch_start = batch_end;
-                            continue;
-                        }
-                        has_error = true;
-                        #[cfg(test)]
-                        SIGNATURE_LIFT_BATCH_TEST_HITS.fetch_add(1, Ordering::Relaxed);
-
-                        let signature_errors_mb =
-                            bytes_to_mb(bitvec_slice_bytes(&signature_errors));
-                        let solve_timer = Instant::now();
-                        let (solutions, domain_dim, batch_solve_timing) = self
-                            .solve_signature_lifts(
-                                s,
-                                t,
-                                subalgebra,
-                                sig_index,
-                                &signature_errors,
-                                &mut solver_cache,
-                            )?;
-                        solve_total_s += solve_timer.elapsed().as_secs_f64();
-                        solve_timing.solver_lookup_s += batch_solve_timing.solver_lookup_s;
-                        solve_timing.solve_s += batch_solve_timing.solve_s;
-                        match domain_dim_seen {
-                            Some(seen) if seen != domain_dim => {
-                                return Err(format!(
-                                    "internal error: inconsistent signature lift domain dimension at (s,t)=({s},{t}) for {} signature {}: saw {seen} and {domain_dim}",
-                                    subalgebra.name(),
-                                    subalgebra.signatures()[sig_index]
-                                ));
-                            }
-                            Some(_) => {}
-                            None => domain_dim_seen = Some(domain_dim),
-                        }
-                        if profile_verbose {
-                            log_process_memory(
-                                "step_after_signature_solve_quotient_batch",
-                                format!(
-                                    "{profile_label} sig={sig_index} quotient_batch={quotient_batch_index} batch={batch_start}-{batch_end} solutions={} signature_errors_mb={:.1}",
-                                    solutions.len(),
-                                    signature_errors_mb,
-                                ),
-                            );
-                        }
-                        drop(signature_errors);
-                        force_release_allocator_pressure();
-
-                        let mut solved = solutions
-                            .into_iter()
-                            .enumerate()
-                            .filter_map(|(offset, solution)| {
-                                solution.map(|solution| (batch_start + offset, solution))
-                            })
-                            .collect::<Vec<_>>();
-                        solved_count += solved.len();
-                        let timer = Instant::now();
-                        let merge_timer = Instant::now();
-                        for batch in solved.chunks(signature_output_batch_len) {
-                            let solution_refs = batch
-                                .iter()
-                                .map(|(_, solution)| solution)
-                                .collect::<Vec<_>>();
-                            let differentials = self.apply_full_differentials_to_vectors(
-                                s,
-                                t,
-                                subalgebra,
-                                sig_index,
-                                domain_dim,
-                                &solution_refs,
-                            )?;
-                            differential_count += differentials.len();
-                            differential_peak_bytes =
-                                differential_peak_bytes.max(bitvec_slice_bytes(&differentials));
-                            for ((index, solution), differential) in batch.iter().zip(differentials)
-                            {
-                                let f_terms = self.signature_vector_to_terms(
-                                    s, t, subalgebra, sig_index, solution,
-                                );
-                                xor_terms(&mut lifts[*index], f_terms);
-                                errors[*index].xor_assign(&differential);
-                            }
-                            force_release_allocator_pressure();
-                        }
-                        signature_full_s += timer.elapsed().as_secs_f64();
-                        merge_s += merge_timer.elapsed().as_secs_f64();
-                        solved.clear();
-                        solved.shrink_to_fit();
-                        force_release_allocator_pressure();
-                        batch_start = batch_end;
-                    }
-
-                    if !has_error {
-                        if profile_detail {
-                            eprintln!(
-                                "ext_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=false extract_s={extract_s:.6} solver_lookup_s=0.000000 solve_s=0.000000 full_s=0.000000 merge_s=0.000000 total_s={:.6}",
-                                subalgebra.name(),
-                                subalgebra.signatures()[sig_index],
-                                signature_error_count,
-                                signature_timer.elapsed().as_secs_f64(),
-                            );
-                        }
-                        continue;
-                    }
-
-                    full_time += Duration::from_secs_f64(signature_full_s);
-                    if profile_verbose {
-                        log_process_memory(
-                            "step_after_signature_full_differential_quotient_batch",
-                            format!(
-                                "{profile_label} sig={sig_index} quotient_batch={quotient_batch_index} solution_refs={} differentials={} differentials_peak_mb={:.1} output_batch_len={signature_output_batch_len}",
-                                solved_count,
-                                differential_count,
-                                bytes_to_mb(differential_peak_bytes),
-                            ),
-                        );
-                    }
-                    if profile_detail {
-                        eprintln!(
-                            "ext_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=true extract_s={extract_s:.6} solver_lookup_s={:.6} solve_s={:.6} solve_total_s={solve_total_s:.6} full_s={signature_full_s:.6} merge_s={merge_s:.6} total_s={:.6}",
-                            subalgebra.name(),
-                            subalgebra.signatures()[sig_index],
-                            signature_error_count,
-                            solve_timing.solver_lookup_s,
-                            solve_timing.solve_s,
-                            signature_timer.elapsed().as_secs_f64(),
-                        );
-                    }
-                }
-
-                for (x, error) in lifts.into_iter().zip(errors) {
-                    if !error.is_zero() {
-                        let remaining = self.format_vector(s.saturating_sub(1), t, &error);
-                        return Err(format!(
-                            "Algorithm 2 produced a non-cycle at (s,t)=({s},{t}) for {}. Remaining error: {remaining}. Use --algorithm naive to compare, or use a bidegree where the Algorithm 2 lower-line condition applies.",
-                            subalgebra.name(),
-                        ));
-                    }
-                    completed_lifts.push(x);
-                }
-                force_release_allocator_pressure();
-            }
-
-            let added = completed_lifts.len();
-            for x in completed_lifts {
-                self.add_generator(s + 1, t, x);
-            }
-            let lift_time = lift_timer.elapsed();
-            log_process_memory(
-                "step_after_quotient_batch_lift",
-                format!(
-                    "{profile_label} quotient={} added={added} output_batch_len={output_batch_len} initial_errors_peak_mb={:.1}",
-                    quotient.len(),
-                    bytes_to_mb(initial_differential_peak_bytes),
-                ),
-            );
-            if profile_detail {
-                eprintln!(
-                    "ext_detail t={t} s={s} B={} added={added} d0_s={:.6} b0_s={:.6} homology_s={:.6} full_s={:.6} lift_s={:.6} total_s={:.6}",
-                    subalgebra.name(),
-                    d0_time.as_secs_f64(),
-                    b0_time.as_secs_f64(),
-                    homology_time.as_secs_f64(),
-                    full_time.as_secs_f64(),
-                    lift_time.as_secs_f64(),
-                    total_timer.elapsed().as_secs_f64(),
-                );
-            }
-            self.log_memory_cache_estimate("step_end", s, t);
-            self.clear_e0_product_cache("step_end", s, t);
-            return Ok(added);
-        }
-
         let mut lifts = Vec::with_capacity(quotient.len());
 
         let timer = Instant::now();
-        let mut errors;
-        if full_differential_output_chunk_bytes().is_some() {
-            let full_target_dim = if s == 0 {
-                usize::from(t == 0)
-            } else {
-                self.basis_dimension_uncached(s - 1, t)
-            };
-            let output_batch_len =
-                full_differential_output_batch_len(full_target_dim, quotient.len());
-            errors = Vec::with_capacity(quotient.len());
-            let mut differential_peak_bytes = 0usize;
-            let mut processed = 0usize;
-            for batch in quotient.chunks(output_batch_len) {
-                #[cfg(test)]
-                INITIAL_FULL_DIFFERENTIAL_BATCH_TEST_HITS.fetch_add(1, Ordering::Relaxed);
-                let quotient_refs = batch.iter().collect::<Vec<_>>();
-                let batch_errors = self.apply_full_differentials_to_vectors(
-                    s,
-                    t,
-                    subalgebra,
-                    0,
-                    d0_domain_dim,
-                    &quotient_refs,
-                )?;
-                differential_peak_bytes =
-                    differential_peak_bytes.max(bitvec_slice_bytes(&batch_errors));
-                for (q, error) in batch.iter().zip(batch_errors.iter()) {
-                    let x = self.signature_vector_to_terms(s, t, subalgebra, 0, q);
-                    let initial_low_error =
-                        self.extract_signature_vector(s.saturating_sub(1), t, subalgebra, 0, error);
-                    if !initial_low_error.is_zero() {
-                        let remaining = self.format_vector(s.saturating_sub(1), t, error);
-                        return Err(format!(
-                            "internal mismatch: E0 representative at (s,t)=({s},{t}) is not an E0-cycle for {}. Full differential: {remaining}",
-                            subalgebra.name()
-                        ));
-                    }
-                    lifts.push(x);
-                }
-                processed += batch_errors.len();
-                errors.extend(batch_errors);
-                force_release_allocator_pressure();
+        let quotient_refs = quotient.iter().collect::<Vec<_>>();
+        let mut errors = self.apply_full_differentials_to_vectors(
+            s,
+            t,
+            subalgebra,
+            0,
+            d0_domain_dim,
+            &quotient_refs,
+        )?;
+        log_process_memory(
+            "step_after_initial_full_differential",
+            format!(
+                "{profile_label} quotient={} errors={} errors_mb={:.1}",
+                quotient_refs.len(),
+                errors.len(),
+                bytes_to_mb(bitvec_slice_bytes(&errors)),
+            ),
+        );
+        for (q, error) in quotient.iter().zip(errors.iter()) {
+            let x = self.signature_vector_to_terms(s, t, subalgebra, 0, q);
+            let initial_low_error =
+                self.extract_signature_vector(s.saturating_sub(1), t, subalgebra, 0, error);
+            if !initial_low_error.is_zero() {
+                let remaining = self.format_vector(s.saturating_sub(1), t, error);
+                return Err(format!(
+                    "internal mismatch: E0 representative at (s,t)=({s},{t}) is not an E0-cycle for {}. Full differential: {remaining}",
+                    subalgebra.name()
+                ));
             }
-            log_process_memory(
-                "step_after_initial_full_differential_batched",
-                format!(
-                    "{profile_label} quotient={} errors={} errors_peak_mb={:.1} output_batch_len={output_batch_len}",
-                    quotient.len(),
-                    processed,
-                    bytes_to_mb(differential_peak_bytes),
-                ),
-            );
-        } else {
-            let quotient_refs = quotient.iter().collect::<Vec<_>>();
-            errors = self.apply_full_differentials_to_vectors(
-                s,
-                t,
-                subalgebra,
-                0,
-                d0_domain_dim,
-                &quotient_refs,
-            )?;
-            log_process_memory(
-                "step_after_initial_full_differential",
-                format!(
-                    "{profile_label} quotient={} errors={} errors_mb={:.1}",
-                    quotient_refs.len(),
-                    errors.len(),
-                    bytes_to_mb(bitvec_slice_bytes(&errors)),
-                ),
-            );
-            for (q, error) in quotient.iter().zip(errors.iter()) {
-                let x = self.signature_vector_to_terms(s, t, subalgebra, 0, q);
-                let initial_low_error =
-                    self.extract_signature_vector(s.saturating_sub(1), t, subalgebra, 0, error);
-                if !initial_low_error.is_zero() {
-                    let remaining = self.format_vector(s.saturating_sub(1), t, error);
-                    return Err(format!(
-                        "internal mismatch: E0 representative at (s,t)=({s},{t}) is not an E0-cycle for {}. Full differential: {remaining}",
-                        subalgebra.name()
-                    ));
-                }
 
-                lifts.push(x);
-            }
+            lifts.push(x);
         }
         let mut full_time = timer.elapsed();
         drop(quotient);
@@ -4109,169 +3781,6 @@ impl Resolution {
         let mut solver_cache = HashMap::<SignatureBasisKey, Arc<LinearSolver>>::default();
         for sig_index in 1..subalgebra.signatures().len() {
             let signature_timer = Instant::now();
-            if full_differential_output_chunk_bytes().is_some() {
-                let signature_error_count = errors.len();
-                let full_target_dim = if s == 0 {
-                    usize::from(t == 0)
-                } else {
-                    self.basis_dimension_uncached(s - 1, t)
-                };
-                let output_batch_len =
-                    full_differential_output_batch_len(full_target_dim, signature_error_count);
-                let mut batch_start = 0usize;
-                let mut extract_s = 0.0;
-                let mut has_error = false;
-                let mut solve_timing = SignatureSolveTiming::default();
-                let mut solve_total_s = 0.0;
-                let mut signature_full_s = 0.0;
-                let mut merge_s = 0.0;
-                let mut solved_count = 0usize;
-                let mut differential_count = 0usize;
-                let mut differential_peak_bytes = 0usize;
-                let mut domain_dim_seen = None::<usize>;
-
-                while batch_start < signature_error_count {
-                    let batch_end = (batch_start + output_batch_len).min(signature_error_count);
-                    let extract_timer = Instant::now();
-                    let mut signature_errors = Vec::with_capacity(batch_end - batch_start);
-                    let mut batch_has_error = false;
-                    for error in &errors[batch_start..batch_end] {
-                        let e = self.extract_signature_vector(
-                            s.saturating_sub(1),
-                            t,
-                            subalgebra,
-                            sig_index,
-                            error,
-                        );
-                        batch_has_error |= !e.is_zero();
-                        signature_errors.push(e);
-                    }
-                    extract_s += extract_timer.elapsed().as_secs_f64();
-                    if !batch_has_error {
-                        batch_start = batch_end;
-                        continue;
-                    }
-                    has_error = true;
-                    #[cfg(test)]
-                    SIGNATURE_LIFT_BATCH_TEST_HITS.fetch_add(1, Ordering::Relaxed);
-
-                    let signature_errors_mb = bytes_to_mb(bitvec_slice_bytes(&signature_errors));
-                    let solve_timer = Instant::now();
-                    let (solutions, domain_dim, batch_solve_timing) = self.solve_signature_lifts(
-                        s,
-                        t,
-                        subalgebra,
-                        sig_index,
-                        &signature_errors,
-                        &mut solver_cache,
-                    )?;
-                    solve_total_s += solve_timer.elapsed().as_secs_f64();
-                    solve_timing.solver_lookup_s += batch_solve_timing.solver_lookup_s;
-                    solve_timing.solve_s += batch_solve_timing.solve_s;
-                    match domain_dim_seen {
-                        Some(seen) if seen != domain_dim => {
-                            return Err(format!(
-                                "internal error: inconsistent signature lift domain dimension at (s,t)=({s},{t}) for {} signature {}: saw {seen} and {domain_dim}",
-                                subalgebra.name(),
-                                subalgebra.signatures()[sig_index]
-                            ));
-                        }
-                        Some(_) => {}
-                        None => domain_dim_seen = Some(domain_dim),
-                    }
-                    if profile_verbose {
-                        log_process_memory(
-                            "step_after_signature_solve_batch",
-                            format!(
-                                "{profile_label} sig={sig_index} batch={batch_start}-{batch_end} solutions={} signature_errors_mb={:.1}",
-                                solutions.len(),
-                                signature_errors_mb,
-                            ),
-                        );
-                    }
-                    drop(signature_errors);
-                    force_release_allocator_pressure();
-
-                    let mut solved = solutions
-                        .into_iter()
-                        .enumerate()
-                        .filter_map(|(offset, solution)| {
-                            solution.map(|solution| (batch_start + offset, solution))
-                        })
-                        .collect::<Vec<_>>();
-                    solved_count += solved.len();
-                    let timer = Instant::now();
-                    let merge_timer = Instant::now();
-                    for batch in solved.chunks(output_batch_len) {
-                        let solution_refs = batch
-                            .iter()
-                            .map(|(_, solution)| solution)
-                            .collect::<Vec<_>>();
-                        let differentials = self.apply_full_differentials_to_vectors(
-                            s,
-                            t,
-                            subalgebra,
-                            sig_index,
-                            domain_dim,
-                            &solution_refs,
-                        )?;
-                        differential_count += differentials.len();
-                        differential_peak_bytes =
-                            differential_peak_bytes.max(bitvec_slice_bytes(&differentials));
-                        for ((index, solution), differential) in batch.iter().zip(differentials) {
-                            let f_terms = self
-                                .signature_vector_to_terms(s, t, subalgebra, sig_index, solution);
-                            xor_terms(&mut lifts[*index], f_terms);
-                            errors[*index].xor_assign(&differential);
-                        }
-                        force_release_allocator_pressure();
-                    }
-                    signature_full_s += timer.elapsed().as_secs_f64();
-                    merge_s += merge_timer.elapsed().as_secs_f64();
-                    solved.clear();
-                    solved.shrink_to_fit();
-                    force_release_allocator_pressure();
-                    batch_start = batch_end;
-                }
-
-                if !has_error {
-                    if profile_detail {
-                        eprintln!(
-                            "ext_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=false extract_s={extract_s:.6} solver_lookup_s=0.000000 solve_s=0.000000 full_s=0.000000 merge_s=0.000000 total_s={:.6}",
-                            subalgebra.name(),
-                            subalgebra.signatures()[sig_index],
-                            signature_error_count,
-                            signature_timer.elapsed().as_secs_f64(),
-                        );
-                    }
-                    continue;
-                }
-
-                full_time += Duration::from_secs_f64(signature_full_s);
-                if profile_verbose {
-                    log_process_memory(
-                        "step_after_signature_full_differential_batched",
-                        format!(
-                            "{profile_label} sig={sig_index} solution_refs={} differentials={} differentials_peak_mb={:.1} output_batch_len={output_batch_len}",
-                            solved_count,
-                            differential_count,
-                            bytes_to_mb(differential_peak_bytes),
-                        ),
-                    );
-                }
-                if profile_detail {
-                    eprintln!(
-                        "ext_signature_detail t={t} s={s} B={} sig={sig_index} signature={} errors={} nonzero=true extract_s={extract_s:.6} solver_lookup_s={:.6} solve_s={:.6} solve_total_s={solve_total_s:.6} full_s={signature_full_s:.6} merge_s={merge_s:.6} total_s={:.6}",
-                        subalgebra.name(),
-                        subalgebra.signatures()[sig_index],
-                        signature_error_count,
-                        solve_timing.solver_lookup_s,
-                        solve_timing.solve_s,
-                        signature_timer.elapsed().as_secs_f64(),
-                    );
-                }
-                continue;
-            }
 
             let extract_timer = Instant::now();
             let mut signature_errors = Vec::with_capacity(errors.len());
@@ -4324,11 +3833,7 @@ impl Resolution {
                 );
             }
             drop(signature_errors);
-            if full_differential_output_chunk_bytes().is_some() {
-                force_release_allocator_pressure();
-            } else {
-                release_allocator_pressure();
-            }
+            release_allocator_pressure();
 
             let mut solved = solutions
                 .into_iter()
@@ -4368,15 +3873,9 @@ impl Resolution {
                     xor_terms(&mut lifts[*index], f_terms);
                     errors[*index].xor_assign(&differential);
                 }
-                if full_differential_output_chunk_bytes().is_some() {
-                    force_release_allocator_pressure();
-                }
             }
             solved.clear();
             solved.shrink_to_fit();
-            if full_differential_output_chunk_bytes().is_some() {
-                force_release_allocator_pressure();
-            }
             let signature_full_s = timer.elapsed().as_secs_f64();
             full_time += Duration::from_secs_f64(signature_full_s);
             let merge_s = merge_timer.elapsed().as_secs_f64();
@@ -5104,7 +4603,6 @@ impl Resolution {
         Ok(col)
     }
 
-    #[allow(dead_code)]
     fn differential_vector_from_terms(
         &mut self,
         s: usize,

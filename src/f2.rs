@@ -36,7 +36,7 @@ impl BitVec {
         self.words.iter().all(|&word| word == 0)
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn get(&self, index: usize) -> bool {
         debug_assert!(index < self.len);
         (self.words[index / 64] & (1_u64 << (index % 64))) != 0
@@ -130,7 +130,7 @@ impl Iterator for Ones<'_> {
     }
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn kernel(columns: &[BitVec], target_dim: usize) -> Vec<BitVec> {
     kernel_with_label(columns, target_dim, None)
 }
@@ -173,7 +173,7 @@ fn kernel_with_label(columns: &[BitVec], target_dim: usize, label: Option<&str>)
     basis
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn quotient_representatives(
     subspace: &[BitVec],
     mod_out_by: &[BitVec],
