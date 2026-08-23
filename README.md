@@ -2,16 +2,14 @@
 
 `min_res` is research software that uses the Nassau algorithm to compute a
 minimal free resolution of the trivial module `F2` over the mod-2 Steenrod
-algebra. Coefficients are represented in the Milnor basis. The project has been
-used on the Wayne State University Grid to compute the minimal resolution
-through internal degree 350.
+algebra. Coefficients are represented in the Milnor basis.
 
-The large computation was run on the Wayne State Grid. A typical production
-configuration used eight compute nodes, with one Grid process and several local
-workers on each node. The recorded hardware was Intel Xeon E5-4627 v4, with 40
-CPU cores per node and approximately 1,500 GB of aggregate memory across the
-job. During the final production run, the largest peak resident-memory use
-observed on a single node was approximately 500 GB.
+The project has been used on the Wayne State Grid to compute the minimal
+resolution through internal degree 350. The computation used 8 nodes. The
+hardware was Intel Xeon E5-4627 v4, with 40 CPU cores per node and
+approximately 1,500 GB of aggregate memory across the job. During the final
+production run, the largest peak resident-memory use observed on a single node
+was approximately 500 GB.
 
 ## Build
 
@@ -37,9 +35,8 @@ Start a calculation:
 ```
 
 In a bidegree `(s, t)`, `t` is the internal degree and `s` is the homological
-degree. `--t N` is the only range parameter and sets the maximum internal
-degree. For every internal-degree layer `1 <= t <= N`, the program computes
-task indices `0 <= task_s < t`, producing the complete triangular output range
+degree. `--t N` sets the maximum internal degree. For every internal-degree
+layer `1 <= t <= N`, the program produces the complete triangular output range
 `0 <= s <= t` in homological degree.
 
 No thread or checkpoint options are required. By default, Rayon uses the
