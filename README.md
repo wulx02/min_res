@@ -1,8 +1,17 @@
-# ext
+# min_res
 
-`ext` is research software that uses the Nassau algorithm to compute a minimal
-free resolution of the trivial module `F2` over the mod-2 Steenrod algebra.
-Coefficients are represented in the Milnor basis.
+`min_res` is research software that uses the Nassau algorithm to compute a
+minimal free resolution of the trivial module `F2` over the mod-2 Steenrod
+algebra. Coefficients are represented in the Milnor basis. The project has been
+used on the Wayne State University Grid to compute the minimal resolution
+through internal degree 350.
+
+The large computation was run on the Wayne State Grid. A typical production
+configuration used eight compute nodes, with one Grid process and several local
+workers on each node. The recorded hardware was Intel Xeon E5-4627 v4, with 40
+CPU cores per node and approximately 1,500 GB of aggregate memory across the
+job. During the final production run, the largest peak resident-memory use
+observed on a single node was approximately 500 GB.
 
 ## Build
 
@@ -27,9 +36,11 @@ Start a calculation:
   --t 100
 ```
 
-`--t N` is the only range parameter. For every internal-degree layer
-`1 <= t <= N`, the program computes the full task range `0 <= s < t`, which
-gives the complete triangular output range `0 <= s <= t`.
+In a bidegree `(s, t)`, `t` is the internal degree and `s` is the homological
+degree. `--t N` is the only range parameter and sets the maximum internal
+degree. For every internal-degree layer `1 <= t <= N`, the program computes
+task indices `0 <= task_s < t`, producing the complete triangular output range
+`0 <= s <= t` in homological degree.
 
 No thread or checkpoint options are required. By default, Rayon uses the
 logical CPUs available to the process. The fixed-`t` batch algorithm uses half
