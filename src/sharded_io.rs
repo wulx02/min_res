@@ -955,7 +955,9 @@ fn parse_gen_meta_records(q: usize, bytes: &[u8]) -> Result<Vec<GenMetaRecord>, 
         ));
     }
     let mut records = Vec::with_capacity(bytes.len() / GEN_META_RECORD_BYTES);
-    for chunk in bytes.chunks_exact(GEN_META_RECORD_BYTES) {
+    let (chunks, remainder) = bytes.as_chunks::<GEN_META_RECORD_BYTES>();
+    debug_assert!(remainder.is_empty());
+    for chunk in chunks {
         let id = u64_at(chunk, 0)? as usize;
         let record_q = u64_at(chunk, 8)? as usize;
         if record_q != q {
@@ -1000,7 +1002,9 @@ fn terms_for_record(
         ));
     };
     let mut terms = Vec::with_capacity(record.term_count);
-    for chunk in bytes.chunks_exact(DIFF_TERM_RECORD_BYTES) {
+    let (chunks, remainder) = bytes.as_chunks::<DIFF_TERM_RECORD_BYTES>();
+    debug_assert!(remainder.is_empty());
+    for chunk in chunks {
         terms.push(ModuleTerm {
             coeff_packed: u64_at(chunk, 0)? as CoeffKey,
             generator: u64_at(chunk, 8)? as usize,

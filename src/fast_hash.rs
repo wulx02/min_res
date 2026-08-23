@@ -33,11 +33,10 @@ impl Hasher for FastHasher {
     }
 
     fn write(&mut self, bytes: &[u8]) {
-        let mut chunks = bytes.chunks_exact(8);
-        for chunk in &mut chunks {
-            self.mix(u64::from_le_bytes(chunk.try_into().unwrap()));
+        let (chunks, rest) = bytes.as_chunks::<8>();
+        for chunk in chunks {
+            self.mix(u64::from_le_bytes(*chunk));
         }
-        let rest = chunks.remainder();
         if !rest.is_empty() {
             let mut tail = [0_u8; 8];
             tail[..rest.len()].copy_from_slice(rest);
