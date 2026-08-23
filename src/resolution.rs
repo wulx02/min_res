@@ -155,6 +155,30 @@ pub enum ComputeMode {
     },
 }
 
+impl ComputeMode {
+    fn ensure_subalgebra_signatures_through(
+        &mut self,
+        degree: usize,
+        algebra_basis: &[Vec<CoeffKey>],
+    ) -> Result<(), String> {
+        match self {
+            Self::Naive => Ok(()),
+            Self::FixedTBatch { inner, .. } => {
+                inner.ensure_subalgebra_signatures_through(degree, algebra_basis)
+            }
+            Self::Auto { subalgebras, .. } | Self::AutoBoundedNaiveFallback { subalgebras, .. } => {
+                for subalgebra in subalgebras {
+                    subalgebra.ensure_signatures_through(degree, algebra_basis)?;
+                }
+                Ok(())
+            }
+            Self::Accelerated { subalgebra, .. } => {
+                subalgebra.ensure_signatures_through(degree, algebra_basis)
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FixedTBatchScheduler {
     Contiguous,
@@ -816,7 +840,7 @@ impl Resolution {
     pub fn compute_from_cursor_with_progress(
         &mut self,
         max_t: usize,
-        mode: ComputeMode,
+        mut mode: ComputeMode,
         cursor: ComputeCursor,
         mut after_step: impl FnMut(&mut Self, ComputeProgress) -> Result<(), String>,
     ) -> Result<ComputeCursor, String> {
@@ -844,6 +868,7 @@ impl Resolution {
         let mut s = cursor.next_s;
         while t <= max_t {
             self.ensure_algebra_basis_through(t);
+            mode.ensure_subalgebra_signatures_through(t, self.algebra_basis.as_ref())?;
             let Some(limit) = fixed_t_task_s_limit(t) else {
                 t += 1;
                 s = 0;
@@ -990,7 +1015,7 @@ impl Resolution {
         shadow: bool,
         validate_commit: bool,
         scheduler: FixedTBatchScheduler,
-        inner: ComputeMode,
+        mut inner: ComputeMode,
         mut after_step: impl FnMut(&mut Self, ComputeProgress) -> Result<(), String>,
     ) -> Result<ComputeCursor, String> {
         if cursor.next_s != 0 {
@@ -1005,6 +1030,8 @@ impl Resolution {
 
         let mut t = cursor.next_t;
         while t <= max_t {
+            self.ensure_algebra_basis_through(t);
+            inner.ensure_subalgebra_signatures_through(t, self.algebra_basis.as_ref())?;
             if shadow {
                 self.compute_fixed_t_batch_shadow_layer(
                     t,

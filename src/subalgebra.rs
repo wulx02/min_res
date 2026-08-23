@@ -263,6 +263,7 @@ pub struct Subalgebra {
     signatures: Vec<Milnor>,
     signature_packed_index: HashMap<CoeffKey, usize>,
     bit_order: Vec<(usize, u32)>,
+    signature_max_degree: Option<usize>,
 }
 
 impl Subalgebra {
@@ -323,7 +324,10 @@ impl Subalgebra {
             })
             .collect::<Vec<_>>();
         let bit_order = compatible_bit_order(&profile);
-        Self::from_profile(Family::F, n, None, profile, bit_order, Some(max_degree))
+        let mut subalgebra =
+            Self::from_profile(Family::F, n, None, profile, bit_order, Some(max_degree))?;
+        subalgebra.signature_max_degree = Some(max_degree);
+        Ok(subalgebra)
     }
 
     pub fn fprime(n: usize, max_degree: usize) -> Result<Self, String> {
@@ -348,7 +352,10 @@ impl Subalgebra {
             &mut signatures,
         );
         sort_signatures(Family::FPrime, &bit_order, &mut signatures);
-        Self::from_signatures(Family::FPrime, n, None, profile, bit_order, signatures)
+        let mut subalgebra =
+            Self::from_signatures(Family::FPrime, n, None, profile, bit_order, signatures)?;
+        subalgebra.signature_max_degree = Some(max_degree);
+        Ok(subalgebra)
     }
 
     fn from_profile(
@@ -401,7 +408,81 @@ impl Subalgebra {
             signatures,
             signature_packed_index,
             bit_order,
+            signature_max_degree: None,
         })
+    }
+
+    pub fn ensure_signatures_through(
+        &mut self,
+        max_degree: usize,
+        algebra_basis: &[Vec<CoeffKey>],
+    ) -> Result<(), String> {
+        let Some(current_max_degree) = self.signature_max_degree else {
+            return Ok(());
+        };
+        if max_degree <= current_max_degree {
+            return Ok(());
+        }
+        if algebra_basis.len() <= max_degree {
+            return Err(format!(
+                "cannot extend {} signatures through degree {max_degree}: Milnor basis is only available through degree {}",
+                self.name(),
+                algebra_basis.len().saturating_sub(1)
+            ));
+        }
+
+        match self.family {
+            Family::F => {
+                let max_index = max_milnor_index(max_degree);
+                self.profile = (1..=max_index)
+                    .map(|j| {
+                        if j <= self.n {
+                            0
+                        } else {
+                            bits_needed((max_degree / weight(j)) as u32)
+                        }
+                    })
+                    .collect();
+                self.bit_order = compatible_bit_order(&self.profile);
+            }
+            Family::FPrime => {
+                self.profile = vec![0; max_milnor_index(max_degree)];
+                self.bit_order = fprime_bit_order(self.n, max_degree);
+            }
+            Family::A | Family::B => return Ok(()),
+        }
+
+        for degree_basis in algebra_basis
+            .iter()
+            .take(max_degree + 1)
+            .skip(current_max_degree + 1)
+        {
+            let mut new_signatures = degree_basis
+                .iter()
+                .copied()
+                .filter(|&packed| match self.family {
+                    Family::F => (0..self.n).all(|i| packed_entry(packed, i) == 0),
+                    Family::FPrime => {
+                        (0..self.n.saturating_sub(1)).all(|i| packed_entry(packed, i) == 0)
+                            && packed_entry(packed, self.n - 1).is_multiple_of(2)
+                    }
+                    Family::A | Family::B => false,
+                })
+                .map(Milnor::from_packed)
+                .collect::<Vec<_>>();
+            sort_signatures(self.family, &self.bit_order, &mut new_signatures);
+
+            for signature in new_signatures {
+                let index = self.signatures.len();
+                let packed = signature
+                    .packed()
+                    .unwrap_or_else(|| panic!("signature {signature} cannot be packed"));
+                self.signature_packed_index.insert(packed, index);
+                self.signatures.push(signature);
+            }
+        }
+        self.signature_max_degree = Some(max_degree);
+        Ok(())
     }
 
     pub fn parse(input: &str, max_degree: usize) -> Result<Self, String> {
@@ -460,13 +541,16 @@ impl Subalgebra {
         } else {
             self.n
         };
-        (
-            family,
-            id,
-            self.profile.len(),
-            self.signatures.len(),
-            self.bit_order.len(),
-        )
+        match self.family {
+            Family::F | Family::FPrime => (family, id, 0, 0, 0),
+            Family::A | Family::B => (
+                family,
+                id,
+                self.profile.len(),
+                self.signatures.len(),
+                self.bit_order.len(),
+            ),
+        }
     }
 
     pub fn signatures(&self) -> &[Milnor] {
@@ -477,7 +561,7 @@ impl Subalgebra {
         match self.family {
             Family::A => Some((0, self.n)),
             Family::B => Some((3, profile_fingerprint(&self.profile))),
-            Family::F => Some((1, profile_fingerprint(&self.profile))),
+            Family::F => Some((1, self.n)),
             Family::FPrime => None,
         }
     }
@@ -2064,6 +2148,54 @@ mod tests {
         );
         assert!(f1.lower_line_applies(10, 20));
         assert!(!f1.lower_line_applies(1, 20));
+    }
+
+    #[test]
+    fn upper_subalgebra_signatures_grow_incrementally_without_changing_indices() {
+        let max_degree = 80;
+        let algebra_basis = (0..=max_degree)
+            .map(|degree| {
+                basis_of_degree(degree)
+                    .into_iter()
+                    .map(|basis_element| basis_element.packed().unwrap())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        for (mut incremental, eager) in [
+            (
+                Subalgebra::f(1, 0).unwrap(),
+                Subalgebra::f(1, max_degree).unwrap(),
+            ),
+            (
+                Subalgebra::f(2, 0).unwrap(),
+                Subalgebra::f(2, max_degree).unwrap(),
+            ),
+            (
+                Subalgebra::fprime(1, 0).unwrap(),
+                Subalgebra::fprime(1, max_degree).unwrap(),
+            ),
+            (
+                Subalgebra::fprime(2, 0).unwrap(),
+                Subalgebra::fprime(2, max_degree).unwrap(),
+            ),
+        ] {
+            let cache_key = incremental.cache_key();
+            for degree in 1..=max_degree {
+                incremental
+                    .ensure_signatures_through(degree, &algebra_basis)
+                    .unwrap();
+                assert_eq!(incremental.cache_key(), cache_key);
+                assert!(
+                    incremental
+                        .signatures()
+                        .iter()
+                        .all(|signature| signature.degree() <= degree)
+                );
+            }
+            assert_eq!(incremental.profile(), eager.profile());
+            assert_eq!(incremental.signatures(), eager.signatures());
+        }
     }
 
     #[test]

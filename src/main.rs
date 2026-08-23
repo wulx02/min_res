@@ -218,7 +218,7 @@ fn build_compute_mode(args: &[String], max_t: usize) -> Result<ComputeMode, Stri
         parse_string_flag(args, "--algorithm")?.unwrap_or_else(|| "fixed-t-batch".to_string());
     match algorithm.as_str() {
         "auto" | "sequential" | "algorithm2-auto" | "alg2-auto" => {
-            let subalgebras = parse_subalgebra_list(args, max_t)?;
+            let subalgebras = parse_subalgebra_list(args)?;
             let strict = has_flag(args, "--strict");
             let force = has_flag(args, "--force");
             Ok(ComputeMode::Auto {
@@ -270,7 +270,7 @@ fn build_compute_mode(args: &[String], max_t: usize) -> Result<ComputeMode, Stri
                 .ok_or_else(|| {
                     "Algorithm 2 needs an explicit --subalgebra A0/A1/A2/...".to_string()
                 })
-                .and_then(|name| Subalgebra::parse(&name, max_t))?;
+                .and_then(|name| Subalgebra::parse(&name, 0))?;
             let strict = has_flag(args, "--strict");
             let force = has_flag(args, "--force");
             Ok(ComputeMode::Accelerated {
@@ -299,7 +299,7 @@ fn build_fixed_t_batch_inner_mode(args: &[String], max_t: usize) -> Result<Compu
     let inner = parse_string_flag(args, "--batch-inner")?.unwrap_or_else(|| "auto".to_string());
     match inner.as_str() {
         "auto" | "sequential" | "algorithm2-auto" | "alg2-auto" => {
-            let subalgebras = parse_subalgebra_list(args, max_t)?;
+            let subalgebras = parse_subalgebra_list(args)?;
             let force = has_flag(args, "--force");
             let bounded_naive_fallback =
                 has_flag(args, "--strict") || max_t > FULL_NAIVE_BATCH_DIAGNOSTIC_MAX_T;
@@ -320,7 +320,7 @@ fn build_fixed_t_batch_inner_mode(args: &[String], max_t: usize) -> Result<Compu
                     "fixed-t-batch --batch-inner accelerated needs --subalgebra A0/A1/A2/..."
                         .to_string()
                 })
-                .and_then(|name| Subalgebra::parse(&name, max_t))?;
+                .and_then(|name| Subalgebra::parse(&name, 0))?;
             let strict = has_flag(args, "--strict") || max_t > FULL_NAIVE_BATCH_DIAGNOSTIC_MAX_T;
             let force = has_flag(args, "--force");
             Ok(ComputeMode::Accelerated {
@@ -1038,7 +1038,7 @@ fn format_memory_status_fields(memory: ProcessMemory) -> String {
     )
 }
 
-fn parse_subalgebra_list(args: &[String], max_t: usize) -> Result<Vec<Subalgebra>, String> {
+fn parse_subalgebra_list(args: &[String]) -> Result<Vec<Subalgebra>, String> {
     let raw = parse_string_flag(args, "--subalgebras")?
         .or(parse_string_flag(args, "--subalgebra")?)
         .unwrap_or_else(|| "A3,B3321,B3221,B3211,A2,A1,A0,F2,F1".to_string());
@@ -1048,7 +1048,7 @@ fn parse_subalgebra_list(args: &[String], max_t: usize) -> Result<Vec<Subalgebra
         if trimmed.is_empty() {
             continue;
         }
-        out.push(Subalgebra::parse(trimmed, max_t)?);
+        out.push(Subalgebra::parse(trimmed, 0)?);
     }
     if out.is_empty() {
         return Err(
