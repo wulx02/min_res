@@ -22,7 +22,7 @@ use crate::f2::{
 use crate::fast_hash::{FastHashMap as HashMap, FastHashSet, fast_hash_map_with_capacity};
 use crate::memory_probe::{ProcessMemory, log_process_memory};
 use crate::milnor::{
-    CoeffKey, Milnor, RowDecompOptions, basis_keys_through_degree, bounded_product_width,
+    CoeffKey, Milnor, RowDecompOptions, basis_keys_of_degree, bounded_product_width,
     multiply_packed_fast_bounded_matching, multiply_packed_fast_raw_for_each_width,
     multiply_packed_keys_with_row_cache, packed_cmp, packed_support_width,
 };
@@ -744,15 +744,15 @@ impl FrozenMatrixBuilder<'_> {
 }
 
 impl Resolution {
-    pub fn new(max_t: usize) -> Self {
-        let mut out = Self::empty(max_t);
+    pub fn new(_max_t: usize) -> Self {
+        let mut out = Self::empty();
         out.add_generator(0, 0, Vec::new());
         out
     }
 
-    fn empty(max_t: usize) -> Self {
+    fn empty() -> Self {
         Self {
-            algebra_basis: Arc::new(basis_keys_through_degree(max_t)),
+            algebra_basis: Arc::new(vec![basis_keys_of_degree(0)]),
             generators: Vec::new(),
             gens_by_s: Vec::new(),
             mult_packed_cache: HashMap::default(),
@@ -777,6 +777,16 @@ impl Resolution {
             fixed_t_previous_group_ranges: None,
             fixed_t_worker_product_caches: Vec::new(),
             cache_policy: CachePolicy::default(),
+        }
+    }
+
+    fn ensure_algebra_basis_through(&mut self, degree: usize) {
+        if self.algebra_basis.len() > degree {
+            return;
+        }
+        let basis = Arc::make_mut(&mut self.algebra_basis);
+        while basis.len() <= degree {
+            basis.push(basis_keys_of_degree(basis.len()));
         }
     }
 
@@ -833,6 +843,7 @@ impl Resolution {
         let mut t = cursor.next_t;
         let mut s = cursor.next_s;
         while t <= max_t {
+            self.ensure_algebra_basis_through(t);
             let Some(limit) = fixed_t_task_s_limit(t) else {
                 t += 1;
                 s = 0;
@@ -1068,6 +1079,7 @@ impl Resolution {
         scheduler: FixedTBatchScheduler,
         inner: &ComputeMode,
     ) -> Result<usize, String> {
+        self.ensure_algebra_basis_through(t);
         let Some(s_limit) = fixed_t_task_s_limit(t) else {
             return Ok(0);
         };
@@ -2479,12 +2491,12 @@ impl Resolution {
         Ok(representatives)
     }
 
-    pub fn from_snapshot(max_t: usize, snapshot: ResolutionSnapshot) -> Result<Self, String> {
+    pub fn from_snapshot(_max_t: usize, snapshot: ResolutionSnapshot) -> Result<Self, String> {
         if snapshot.generators.is_empty() {
             return Err("checkpoint contains no generators".to_string());
         }
 
-        let mut out = Self::empty(max_t);
+        let mut out = Self::empty();
         for (expected_id, generator) in snapshot.generators.into_iter().enumerate() {
             if generator.id != expected_id {
                 return Err(format!(
@@ -2541,7 +2553,7 @@ impl Resolution {
     }
 
     pub fn from_sparse_snapshot(
-        max_t: usize,
+        _max_t: usize,
         total_generator_count: usize,
         snapshot: ResolutionSnapshot,
     ) -> Result<Self, String> {
@@ -2549,7 +2561,7 @@ impl Resolution {
             return Err("sparse checkpoint contains no generator id space".to_string());
         }
 
-        let mut out = Self::empty(max_t);
+        let mut out = Self::empty();
         let empty_differential = Arc::new(Vec::new());
         out.generators = (0..total_generator_count)
             .map(|id| Generator {
@@ -7419,6 +7431,32 @@ mod tests {
     }
 
     #[test]
+    fn milnor_basis_grows_only_when_each_t_layer_is_reached() {
+        let mut resolution = Resolution::new(140);
+        assert_eq!(resolution.algebra_basis.len(), 1);
+
+        let mut completed_layers = Vec::new();
+        resolution
+            .compute_from_cursor_with_progress(
+                8,
+                ComputeMode::Naive,
+                ComputeCursor::start(),
+                |resolution, progress| {
+                    if progress.next_s == 0 {
+                        completed_layers.push((progress.t, resolution.algebra_basis.len()));
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap();
+
+        assert_eq!(
+            completed_layers,
+            (1..=8).map(|t| (t, t + 1)).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn first_generators_match_low_degree_expectations() {
         let mut res = Resolution::new(8);
         res.compute(8, ComputeMode::Naive).unwrap();
@@ -7456,6 +7494,7 @@ mod tests {
     #[test]
     fn subalgebra_selection_uses_task_s_not_output_q() {
         let mut res = Resolution::new(2);
+        res.ensure_algebra_basis_through(2);
         let a0 = Subalgebra::a(0).unwrap();
         assert!(
             a0.selection_condition_applies(0, 2),
@@ -8078,6 +8117,7 @@ mod tests {
         let mut resolution = Resolution::new(24);
         let t = 20;
         let s = 0;
+        resolution.ensure_algebra_basis_through(t);
         let basis_dims = (0..=s + 1)
             .map(|index| resolution.basis_dimension_uncached(index, t))
             .collect::<Vec<_>>();
@@ -8264,6 +8304,7 @@ mod tests {
         );
         let subalgebra = Subalgebra::a(0).unwrap();
         let t = 5;
+        resolution.ensure_algebra_basis_through(t);
 
         let expected_chain_1 =
             manual_signature_build_chain_cost(&mut resolution, 1, t, &subalgebra);
@@ -8551,6 +8592,7 @@ mod tests {
         );
         let active_s = vec![0, 1, 2];
         let basis_dims = vec![1, 3, 5, 1];
+        resolution.ensure_algebra_basis_through(5);
         let inner = ComputeMode::Accelerated {
             subalgebra: Subalgebra::a(0).unwrap(),
             strict: false,
@@ -9031,6 +9073,7 @@ mod tests {
     fn frozen_t_slice_differential_squares_to_zero() {
         let mut resolution = Resolution::new(8);
         resolution.compute(5, ComputeMode::Naive).unwrap();
+        resolution.ensure_algebra_basis_through(6);
         let view = FrozenResolutionView::from_resolution(&resolution, 6);
         let mut builder = FrozenMatrixBuilder::new(&view);
 

@@ -206,6 +206,7 @@ pub fn basis_through_degree(max_degree: usize) -> Vec<Vec<Milnor>> {
     (0..=max_degree).map(basis_of_degree).collect()
 }
 
+#[cfg(test)]
 pub fn basis_keys_through_degree(max_degree: usize) -> Vec<Vec<CoeffKey>> {
     let counts = packed_basis_counts_through_degree(max_degree);
     (0..=max_degree)
@@ -225,7 +226,6 @@ pub fn basis_of_degree(degree: usize) -> Vec<Milnor> {
     out
 }
 
-#[cfg(test)]
 pub fn basis_keys_of_degree(degree: usize) -> Vec<CoeffKey> {
     basis_keys_of_degree_with_capacity(degree, packed_basis_count_of_degree(degree))
 }
@@ -266,7 +266,6 @@ fn packed_basis_counts_through_degree(max_degree: usize) -> Vec<usize> {
     counts
 }
 
-#[cfg(test)]
 fn packed_basis_count_of_degree(degree: usize) -> usize {
     packed_basis_counts_through_degree(degree)[degree]
 }
