@@ -1,17 +1,21 @@
-Licensing notice
+MIT License
 
-This repository is a combined distribution under the SPDX expression
-`MIT AND Apache-2.0`:
+Copyright (c) 2026 wulx02
 
-- Original code and generated data in this repository are licensed under the
-  MIT License in LICENSE-MIT.
-- Portions translated or adapted from SSeqCpp or SpectralSequences/sseq are
-  distributed under the Apache License 2.0 in LICENSE-APACHE.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-Recipients of the combined distribution must comply with both licenses. The
-origin and licensing of the affected source code are described in
-PROVENANCE.md and THIRD_PARTY_NOTICES.md.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-The GPL-2.0-licensed cnassau/steenrod project is cited only as a related
-implementation of Christian Nassau's published algorithm. No source code from
-cnassau/steenrod is copied, translated, linked, or distributed here.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

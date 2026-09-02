@@ -39,7 +39,7 @@ Codex used code and designs from the `ext` implementation in the
 SpectralSequences/sseq repository as structural and implementation references.
 
 - Project: [SpectralSequences/sseq](https://github.com/SpectralSequences/sseq),
-  especially its [`ext`](https://github.com/SpectralSequences/sseq/tree/master/ext)
+  especially its [`ext`](https://github.com/SpectralSequences/sseq/tree/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext)
   directory
 - Authors named in the `ext` package metadata: Hood Chatham, Dexter Chua, and
   Joey Beauvais-Feisthauer

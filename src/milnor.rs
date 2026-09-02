@@ -1,3 +1,8 @@
+// Portions of this file were translated, structurally adapted, or implemented
+// with reference to SSeqCpp and SpectralSequences/sseq, then modified for this
+// project. Each affected routine is labeled below; see
+// PROVENANCE.md, THIRD_PARTY_NOTICES.md, and LICENSE-APACHE.
+
 use std::cmp::Ordering;
 use std::fmt;
 
@@ -5,10 +10,6 @@ use crate::fast_hash::{FastHashMap as HashMap, FastHashSet as HashSet};
 
 pub type CoeffKey = u64;
 
-// Portions of this file were translated, structurally adapted, or implemented
-// with reference to SSeqCpp and SpectralSequences/sseq, then modified for this
-// project. Each affected routine is labeled below; see
-// PROVENANCE.md, THIRD_PARTY_NOTICES.md, and LICENSE-APACHE.
 pub const PACKED_ENTRY_LIMIT: usize = 9;
 pub const PACKED_BASIS_UNCHECKED_MAX_DEGREE: usize = 512;
 const PACKED_ENTRY_WIDTHS: [usize; PACKED_ENTRY_LIMIT] = [10, 8, 7, 6, 5, 4, 3, 2, 1];
@@ -382,15 +383,11 @@ fn max_milnor_index(degree: usize) -> usize {
     index
 }
 
-// Provenance: public entry point to the generic Milnor-product implementation
-// referenced against sseq `PPartMultiplier`; see PROVENANCE.md.
 pub fn multiply(left: &Milnor, right: &Milnor) -> Vec<Milnor> {
     let mut row_cache = HashMap::default();
     multiply_with_row_cache(left, right, &mut row_cache)
 }
 
-// Provenance: wrapper around the generic Milnor-product implementation
-// referenced against sseq `PPartMultiplier`; the cache API is local.
 pub fn multiply_with_row_cache(
     left: &Milnor,
     right: &Milnor,
@@ -402,8 +399,6 @@ pub fn multiply_with_row_cache(
         .collect()
 }
 
-// Provenance: wrapper around the generic Milnor-product implementation
-// referenced against sseq `PPartMultiplier`; packed storage is local.
 pub fn multiply_packed_with_row_cache(
     left: &Milnor,
     right: &Milnor,
@@ -572,8 +567,9 @@ pub(crate) fn bounded_product_width(product_degree_bound: usize) -> usize {
     PACKED_ENTRY_LIMIT
 }
 
-// Provenance: implementation reference to SSeqCpp `SortMod2(MMilnor1d&)`;
-// this version counts complete equal runs before cancelling modulo two.
+// Provenance: structural adaptation of SSeqCpp `SortMod2(MMilnor1d&)`: sort,
+// then cancel equal pairs. This version scans full runs in the local packed
+// order, writes odd-parity terms in place, and truncates the vector.
 fn sort_packed_mod2(terms: &mut Vec<CoeffKey>) {
     if terms.len() < 2 {
         return;
@@ -941,8 +937,6 @@ define_mul_packed_xi_v3_for_each!(mul_packed_xi_v3_for_each_5, 5);
 define_mul_packed_xi_v3_for_each!(mul_packed_xi_v3_for_each_6, 6);
 define_mul_packed_xi_v3_for_each!(mul_packed_xi_v3_for_each_7, 7);
 
-// Provenance: public filter wrapper around the generic Milnor-product code
-// referenced against sseq `PPartMultiplier`. See PROVENANCE.md.
 pub fn multiply_packed_with_row_cache_matching<F>(
     left: &Milnor,
     right: &Milnor,
@@ -955,8 +949,6 @@ where
     multiply_packed_with_row_cache_internal(left, right, row_cache, keep, None)
 }
 
-// Provenance: packed-key wrapper around the generic Milnor-product code
-// referenced against sseq `PPartMultiplier`. See PROVENANCE.md.
 pub fn multiply_packed_keys_with_row_cache(
     left_key: CoeffKey,
     right_key: CoeffKey,
@@ -965,8 +957,6 @@ pub fn multiply_packed_keys_with_row_cache(
     multiply_packed_keys_with_row_cache_matching(left_key, right_key, row_cache, |_| true)
 }
 
-// Provenance: packed-key/filter wrapper around the generic Milnor-product code
-// referenced against sseq `PPartMultiplier`. See PROVENANCE.md.
 pub fn multiply_packed_keys_with_row_cache_matching<F>(
     left_key: CoeffKey,
     right_key: CoeffKey,
@@ -980,8 +970,6 @@ where
 }
 
 #[cfg(test)]
-// Provenance: test wrapper around the generic Milnor-product implementation
-// referenced against sseq `PPartMultiplier`; the profile filter is local.
 pub fn multiply_packed_btrivial_with_row_cache<F>(
     left: &Milnor,
     right: &Milnor,
@@ -996,8 +984,6 @@ where
 }
 
 #[cfg(test)]
-// Provenance: test wrapper around the generic Milnor-product implementation
-// referenced against sseq `PPartMultiplier`; the profile filter is local.
 pub fn multiply_packed_btrivial_keys_with_row_cache<F>(
     left_key: CoeffKey,
     right_key: CoeffKey,
@@ -1017,8 +1003,6 @@ where
     )
 }
 
-// Provenance: wrapper around the generic Milnor-product implementation
-// referenced against sseq `PPartMultiplier`. See PROVENANCE.md.
 fn multiply_packed_with_row_cache_internal<F>(
     left: &Milnor,
     right: &Milnor,
@@ -1038,8 +1022,6 @@ where
     )
 }
 
-// Provenance: packed-key wrapper around the generic Milnor-product
-// implementation referenced against sseq `PPartMultiplier`.
 fn multiply_packed_keys_with_row_cache_internal<F>(
     left_key: CoeffKey,
     right_key: CoeffKey,
@@ -1069,8 +1051,9 @@ where
     )
 }
 
-// Provenance: implementation reference and shared Milnor-product mathematics
-// with sseq `PPartMultiplier`; not a direct translation.
+// Provenance: structural adaptation of sseq `PPartMultiplier` and shared
+// Milnor-product mathematics. This version caches weighted row decompositions,
+// uses recursive traversal and local packed output, and filters emitted terms.
 fn multiply_packed_entries_with_row_cache_internal<F>(
     left_entries: &[u32],
     right_entries: &[u32],
@@ -1136,8 +1119,9 @@ where
 
 // Keeping the recursion state explicit avoids allocating a context object in
 // this product hot path.
-// Provenance: implementation reference and shared Milnor-product mathematics
-// with sseq `PPartMultiplier::{next_val, update, next}`; this recursion is local.
+// Provenance: structural adaptation of sseq
+// `PPartMultiplier::{next_val, update, next}` and shared Milnor-product
+// mathematics. The explicit recursive state and hash-set parity are local.
 #[allow(clippy::too_many_arguments)]
 fn multiply_rec<F>(
     row: usize,
@@ -1269,8 +1253,8 @@ fn floor_log2(value: u32) -> usize {
     }
 }
 
-// Provenance: implementation reference and shared Milnor-product mathematics
-// with sseq `PPartMultiplier`; the cached row representation is local.
+// Provenance: structural adaptation of the admissible-row enumeration in sseq
+// `PPartMultiplier`; precomputation and the compact cached rows are local.
 fn row_decompositions(value: u32, max_j: usize) -> RowDecompOptions {
     debug_assert!(max_j < PRODUCT_COLUMN_LIMIT);
     let width = max_j + 1;
@@ -1280,8 +1264,8 @@ fn row_decompositions(value: u32, max_j: usize) -> RowDecompOptions {
     RowDecompOptions::new(width, out)
 }
 
-// Provenance: implementation reference and shared Milnor-product mathematics
-// with sseq `PPartMultiplier`; this recursive enumerator is local.
+// Provenance: structural adaptation of the weighted row enumeration in sseq
+// `PPartMultiplier`; this descending recursive enumerator is local.
 fn row_decomp_rec(remaining: u32, j: usize, width: usize, current: &mut [u32], out: &mut Vec<u32>) {
     let place = 1_u32 << j;
     for value in 0..=remaining / place {
@@ -1298,8 +1282,9 @@ fn row_decomp_rec(remaining: u32, j: usize, width: usize, current: &mut [u32], o
     current[j] = 0;
 }
 
-// Provenance: implementation reference and shared Milnor-product mathematics
-// with sseq `PPartMultiplier`; local packing and parity checks differ.
+// Provenance: structural adaptation of sseq `PPartMultiplier`'s diagonal
+// overlap test and output-exponent construction. Packed fields, bounds, and
+// error handling are local.
 fn leaf_term_packed(
     right_entries: &[u32],
     col_sums: &[u32],

@@ -612,8 +612,9 @@ impl FrozenResolutionView {
         &self.generators[id]
     }
 
-    // Provenance: implementation reference to sseq `FreeModule::compute_basis`
-    // and its generator/operation index mapping; storage and caching are local.
+    // Provenance: structural adaptation of sseq `FreeModule::compute_basis`
+    // and its generator/operation ordering. This version emits local packed
+    // `BasisElem` values and omits generators from the frozen layer.
     fn build_basis(&self, s: usize) -> Vec<BasisElem> {
         let mut out = Vec::new();
         let Some(gens) = self.gens_by_s.get(s) else {
@@ -693,9 +694,10 @@ impl FrozenMatrixBuilder<'_> {
         }
     }
 
-    // Provenance: implementation reference to sseq
+    // Provenance: structural adaptation of sseq
     // `ModuleHomomorphism::get_matrix` and
-    // `FreeModuleHomomorphism::apply_to_basis_element`; columns are local.
+    // `FreeModuleHomomorphism::apply_to_basis_element`. This frozen version
+    // builds dense F_2 columns from a local immutable layer snapshot.
     fn d_matrix(&mut self, s: usize) -> Result<LinearMap, String> {
         let domain = self.view.build_basis(s);
         let t = self.view.frozen_t;
@@ -730,9 +732,10 @@ impl FrozenMatrixBuilder<'_> {
         })
     }
 
-    // Provenance: implementation reference to sseq
-    // `FreeModuleHomomorphism::apply_to_basis_element`; packed products and
-    // target indexing are local. See PROVENANCE.md.
+    // Provenance: structural adaptation of sseq
+    // `FreeModuleHomomorphism::apply_to_basis_element`. This version multiplies
+    // local packed coefficients, maps `(coefficient, generator)` to a target
+    // row, and caches products in the frozen matrix builder.
     fn differential_of_basis_elem_packed(
         &mut self,
         elem: &BasisElem,
@@ -841,8 +844,6 @@ impl Resolution {
             .map(|_| ())
     }
 
-    // Provenance: local wrapper around the sequential resolution traversal
-    // referenced from sseq `Resolution::compute_through_bidegree*`.
     pub fn compute_from_cursor(
         &mut self,
         max_t: usize,
@@ -852,9 +853,12 @@ impl Resolution {
         self.compute_from_cursor_with_progress(max_t, mode, cursor, |_, _| Ok(()))
     }
 
-    // Provenance: implementation reference to sseq
-    // `Resolution::compute_through_bidegree{,_with_callback}`; the cursor,
-    // triangular traversal, and per-layer basis growth are local.
+    // Provenance: structural adaptation of the t-major, s-inner traversal in
+    // sseq Nassau `Resolution::compute_through_bidegree`. The ordinary sseq
+    // `compute_through_bidegree_with_callback` is an implementation reference
+    // only for post-bidegree notification; its dependency scheduler is not
+    // retained. Cursor resume, triangular bounds, mode dispatch, and per-layer
+    // Milnor and signature growth are local.
     pub fn compute_from_cursor_with_progress(
         &mut self,
         max_t: usize,
@@ -921,8 +925,6 @@ impl Resolution {
         })
     }
 
-    // Provenance: implementation reference to sseq's ordinary and Nassau
-    // resolution dispatch; local modes and fallback policies differ.
     fn compute_step(
         &mut self,
         s: usize,
@@ -3198,9 +3200,11 @@ impl Resolution {
             .retain(|key, _| key.t >= keep_from);
     }
 
-    // Provenance: implementation reference and shared Nassau subalgebra
-    // selection mathematics with sseq `MilnorSubalgebra::optimal_for`; local
-    // candidates, certification data, priorities, and cost estimates differ.
+    // Provenance: structural adaptation of the candidate-selection stage in
+    // sseq `MilnorSubalgebra::optimal_for`, which takes the last candidate in
+    // its initial consecutive applicable prefix. This version instead uses an
+    // explicit candidate list, certification/force controls, adjacent
+    // signature dimensions as its cost, and a local family-priority tie-break.
     fn choose_subalgebra<'a>(
         &mut self,
         s: usize,
@@ -3241,8 +3245,6 @@ impl Resolution {
         best.map(|(_, subalgebra)| subalgebra)
     }
 
-    // Provenance: local mode dispatcher around the subalgebra selection
-    // referenced from sseq `MilnorSubalgebra::optimal_for`.
     fn selected_algorithm2_subalgebra_for_mode(
         &mut self,
         s: usize,
@@ -4072,9 +4074,10 @@ impl Resolution {
         ))
     }
 
-    // Provenance: implementation reference to sseq
+    // Provenance: structural adaptation of sseq
     // `ModuleHomomorphism::get_matrix` and
-    // `FreeModuleHomomorphism::apply_to_basis_element`; columns are local.
+    // `FreeModuleHomomorphism::apply_to_basis_element`. This version builds
+    // dense F_2 columns and uses local cached basis/index representations.
     fn d_matrix(&mut self, s: usize, t: usize) -> Result<LinearMap, String> {
         let domain = self.basis_cached(s, t);
         if s == 0 {
@@ -4113,7 +4116,9 @@ impl Resolution {
 
     // Provenance: structural adaptation of sseq
     // `MilnorSubalgebra::signature_matrix` and
-    // `ModuleHomomorphism::get_partial_matrix`; caches and packed columns differ.
+    // `ModuleHomomorphism::get_partial_matrix`. This version uses local packed
+    // coefficients, cached signature bases and routing, dense F_2 columns, and
+    // parallel column construction with explicit ordering checks.
     fn d_matrix_signature(
         &mut self,
         s: usize,
@@ -4272,8 +4277,6 @@ impl Resolution {
         })
     }
 
-    // Provenance: local cache wrapper around the signature-matrix construction
-    // structurally adapted from sseq `MilnorSubalgebra::signature_matrix`.
     fn d_matrix_signature_cached(
         &mut self,
         s: usize,
@@ -4627,9 +4630,11 @@ impl Resolution {
         Ok(out)
     }
 
-    // Provenance: implementation reference to sseq
-    // `FreeModuleHomomorphism::apply_to_basis_element`; packed products and
-    // target indexing are local. See PROVENANCE.md.
+    // Provenance: structural adaptation of sseq
+    // `FreeModuleHomomorphism::apply_to_basis_element`. This version multiplies
+    // local packed coefficients and toggles rows found through a
+    // `(coefficient, generator)` index, with cached products and explicit
+    // missing-term errors.
     fn differential_of_basis_elem_packed(
         &mut self,
         elem: &BasisElem,
@@ -4688,8 +4693,9 @@ impl Resolution {
         self.build_basis(s, t)
     }
 
-    // Provenance: implementation reference to sseq `FreeModule::compute_basis`
-    // and its generator/operation index mapping; storage is local.
+    // Provenance: structural adaptation of sseq `FreeModule::compute_basis`
+    // and its generator/operation ordering. This version materializes packed
+    // `BasisElem` values with global generator ids instead of offset tables.
     fn build_basis(&self, s: usize, t: usize) -> Vec<BasisElem> {
         let mut out = Vec::new();
         let Some(gens) = self.gens_by_s.get(s) else {
@@ -4711,8 +4717,6 @@ impl Resolution {
         out
     }
 
-    // Provenance: local cache wrapper around the free-module basis ordering
-    // referenced from sseq `FreeModule::compute_basis`.
     fn basis_cached(&mut self, s: usize, t: usize) -> Arc<Vec<BasisElem>> {
         let key = (s, t);
         if let Some(cached) = self.basis_cache.get(&key) {

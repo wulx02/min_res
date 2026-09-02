@@ -25,4 +25,4 @@ done
 ```
 
 These generated data files are distributed under the MIT License in
-[`LICENSE-MIT`](../LICENSE-MIT).
+[`LICENSE`](../LICENSE).

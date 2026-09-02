@@ -257,6 +257,6 @@ Original code in this project is licensed under the MIT License. The
 portions derived from SSeqCpp or SpectralSequences/sseq are licensed under the
 Apache License 2.0.
 The combined distribution is therefore identified as `MIT AND Apache-2.0`.
-See the [licensing overview](LICENSE), [MIT License](LICENSE-MIT),
+See the [licensing overview](LICENSING.md), [MIT License](LICENSE),
 [Apache License 2.0](LICENSE-APACHE), and
 [third-party notices](THIRD_PARTY_NOTICES.md).

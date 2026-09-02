@@ -44,7 +44,7 @@ The labels used here have distinct meanings:
 ### `max_mask`
 
 - Upstream function: SSeqCpp
-  [`max_mask`](https://github.com/WayneLin92/SSeqCpp/blob/master/src/steenrod.cpp).
+  [`max_mask`](https://github.com/WayneLin92/SSeqCpp/blob/23d12c973db2b294a6c00c15bd106e70b0af3fa6/src/steenrod.cpp).
 - Relationship: **direct source adaptation**. The shift-and-mask body is a Rust
   translation of the SSeqCpp function.
 
@@ -54,7 +54,7 @@ This entry covers `mul_packed_xi_v3_for_each_1` through
 `mul_packed_xi_v3_for_each_9`.
 
 - Upstream function: SSeqCpp
-  [`MulMilnorV3`](https://github.com/WayneLin92/SSeqCpp/blob/master/src/steenrod.cpp).
+  [`MulMilnorV3`](https://github.com/WayneLin92/SSeqCpp/blob/23d12c973db2b294a6c00c15bd106e70b0af3fa6/src/steenrod.cpp).
 - Relationship: **direct source adaptation**. The `X`, `XR`, `XS`, and `XT`
   state, `R_floor`, initialization, mask search, traversal, backtracking, and
   result construction follow `MulMilnorV3`.
@@ -72,7 +72,7 @@ This entry covers `multiply_packed_fast`,
 
 - Upstream functions: SSeqCpp `MulMilnor`, `MulMilnorV3`, `Milnor::operator*`,
   and `mulP` in
-  [`src/steenrod.cpp`](https://github.com/WayneLin92/SSeqCpp/blob/master/src/steenrod.cpp).
+  [`src/steenrod.cpp`](https://github.com/WayneLin92/SSeqCpp/blob/23d12c973db2b294a6c00c15bd106e70b0af3fa6/src/steenrod.cpp).
 - Relationship: these are local dispatch and filtering wrappers around the
   directly adapted V3 kernel. Their wrapper bodies are not translations of a
   single upstream function, but their multiplication work is performed by the
@@ -88,10 +88,10 @@ This entry covers `pack_entries`, `pack_padded_entries`,
 
 - Upstream functions used as references:
   - SSeqCpp `MMilnor::Xi` and `MMilnor::ToXi` in
-    [`include/algebras/steenrod.h`](https://github.com/WayneLin92/SSeqCpp/blob/master/include/algebras/steenrod.h).
+    [`include/algebras/steenrod.h`](https://github.com/WayneLin92/SSeqCpp/blob/23d12c973db2b294a6c00c15bd106e70b0af3fa6/include/algebras/steenrod.h).
   - SpectralSequences/sseq `PPart::try_from_slice`, `PPart::from_slice`,
     `PPart::set`, `PPart::get`, `PPart::bits`, and `PPart::from_bits` in
-    [`milnor_algebra.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/crates/algebra/src/algebra/milnor_algebra.rs).
+    [`milnor_algebra.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/crates/algebra/src/algebra/milnor_algebra.rs).
 - Relationship: **implementation reference**. All three implementations store
   a Milnor exponent vector in one machine word and convert between packed and
   unpacked forms. This project uses its own contiguous field widths and is not
@@ -107,7 +107,7 @@ This entry covers `basis_through_degree`, `basis_keys_through_degree`,
 
 - Upstream functions used as references: SpectralSequences/sseq
   `MilnorAlgebra::compute_ppart` and `MilnorAlgebra::generate_basis_2` in
-  [`milnor_algebra.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/crates/algebra/src/algebra/milnor_algebra.rs).
+  [`milnor_algebra.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/crates/algebra/src/algebra/milnor_algebra.rs).
 - Relationship: **implementation reference** and **shared mathematical
   algorithm**. The local code recursively enumerates weighted exponent
   partitions; sseq incrementally extends degree-indexed tables. The local
@@ -117,26 +117,33 @@ This entry covers `basis_through_degree`, `basis_keys_through_degree`,
 
 This entry covers `multiply_packed_entries_with_row_cache_internal`,
 `multiply_rec`, `row_decompositions`, `row_decomp_rec`, and
-`leaf_term_packed`, together with the public `multiply*_with_row_cache`
-wrappers that call them.
+`leaf_term_packed`.
 
 - Upstream functions used as references: SpectralSequences/sseq
   `PPartMultiplier::new_from_allocation`, `PPartMultiplier::next_val`,
   `PPartMultiplier::update`, and `PPartMultiplier::next` in
-  [`milnor_algebra.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/crates/algebra/src/algebra/milnor_algebra.rs).
-- Relationship: **implementation reference** and **shared mathematical
-  algorithm**. Both enumerate matrices in Milnor's product formula and cancel
-  coefficients modulo two. The local code uses cached recursive row
-  decompositions rather than sseq's mutable matrix iterator, so this is not a
-  line-by-line translation.
+  [`milnor_algebra.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/crates/algebra/src/algebra/milnor_algebra.rs).
+- Relationship: **structural adaptation** and **shared mathematical
+  algorithm**. Both represent Milnor multiplication by constrained matrices,
+  enumerate admissible entries, reject diagonals whose binary summands
+  overlap, form output exponents from diagonal sums, and cancel repeated terms
+  modulo two.
+- Local changes: this project precomputes and caches weighted row
+  decompositions, traverses them recursively instead of mutating sseq's matrix
+  iterator, retains only column sums and diagonal state during traversal, uses
+  the project's packed coefficient layout, and adds callback filters and
+  optional profile-trivial filtering. A local hash set performs parity
+  cancellation as terms are emitted.
 
 ### `sort_packed_mod2`
 
 - Upstream function: SSeqCpp
-  [`SortMod2(MMilnor1d&)`](https://github.com/WayneLin92/SSeqCpp/blob/master/src/steenrod.cpp).
-- Relationship: **implementation reference**. Both sort sparse terms and cancel
-  equal terms modulo two. The local implementation counts the parity of each
-  complete run instead of marking and removing adjacent pairs.
+  [`SortMod2(MMilnor1d&)`](https://github.com/WayneLin92/SSeqCpp/blob/23d12c973db2b294a6c00c15bd106e70b0af3fa6/src/steenrod.cpp).
+- Relationship: **structural adaptation**. Both first sort sparse terms and
+  then remove equal terms in pairs to reduce coefficients modulo two.
+- Local changes: this project scans each complete equal run, writes back only
+  odd-parity runs, truncates the vector in place, and uses its packed Milnor
+  ordering rather than SSeqCpp's `MMilnor` ordering and container operations.
 
 ## `src/f2.rs`
 
@@ -144,10 +151,10 @@ wrappers that call them.
 
 - Upstream functions used as references:
   - SSeqCpp `Residue`, `ResidueInplace`, `AddToSpace`, and `GetSpace` in
-    [`src/linalg.cpp`](https://github.com/WayneLin92/SSeqCpp/blob/master/src/linalg.cpp).
+    [`src/linalg.cpp`](https://github.com/WayneLin92/SSeqCpp/blob/23d12c973db2b294a6c00c15bd106e70b0af3fa6/src/linalg.cpp).
   - SpectralSequences/sseq `Subspace::reduce`, `Subspace::add_vector`, and
     `Matrix::row_reduce` in its
-    [`matrix`](https://github.com/SpectralSequences/sseq/tree/master/ext/crates/fp/src/matrix)
+    [`matrix`](https://github.com/SpectralSequences/sseq/tree/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/crates/fp/src/matrix)
     module.
 - Relationship: **structural adaptation** of pivot reduction and basis
   insertion. The local representation is a dense `u64` bit vector; SSeqCpp
@@ -159,15 +166,15 @@ wrappers that call them.
 - Upstream functions used as references:
   - SSeqCpp `GetInvMap`, `SetLinearMap`, `SetLinearMapV2`, and
     `SetLinearMapV3` in
-    [`src/linalg.cpp`](https://github.com/WayneLin92/SSeqCpp/blob/master/src/linalg.cpp).
+    [`src/linalg.cpp`](https://github.com/WayneLin92/SSeqCpp/blob/23d12c973db2b294a6c00c15bd106e70b0af3fa6/src/linalg.cpp).
   - SpectralSequences/sseq `Matrix::row_reduce`,
     `Matrix::compute_quasi_inverse`, and `Matrix::compute_kernel` in
-    [`matrix_inner.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/crates/fp/src/matrix/matrix_inner.rs).
+    [`matrix_inner.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/crates/fp/src/matrix/matrix_inner.rs).
 - Relationship: **structural adaptation**. The local functions reduce an image
   while applying the same row operations to a source combination; a zero image
   produces a relation. The storage and APIs are local.
 
-### `kernel` and `kernel_with_label`
+### `kernel_with_label`
 
 - Upstream functions used as references: SSeqCpp `SetLinearMap` and
   SpectralSequences/sseq `Matrix::compute_kernel`.
@@ -179,10 +186,10 @@ wrappers that call them.
 
 - Upstream functions used as references:
   - SSeqCpp `GetInvMap`, `GetImage`, and `GetInvImage` in
-    [`src/linalg.cpp`](https://github.com/WayneLin92/SSeqCpp/blob/master/src/linalg.cpp).
+    [`src/linalg.cpp`](https://github.com/WayneLin92/SSeqCpp/blob/23d12c973db2b294a6c00c15bd106e70b0af3fa6/src/linalg.cpp).
   - SpectralSequences/sseq `Matrix::compute_quasi_inverse` and
     `QuasiInverse::apply` in its
-    [`matrix`](https://github.com/SpectralSequences/sseq/tree/master/ext/crates/fp/src/matrix)
+    [`matrix`](https://github.com/SpectralSequences/sseq/tree/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/crates/fp/src/matrix)
     module.
 - Relationship: **structural adaptation** of an image basis carrying chosen
   preimages. It is not a translation of sseq's matrix or quasi-inverse types.
@@ -205,8 +212,7 @@ wrappers that call them.
 
 This entry covers `homology_representatives`,
 `homology_representatives_with_label`,
-`homology_representative_batches_with_label`, and
-`HomologyRepresentativeBatches::next_batch`.
+and `homology_representative_batches_with_label`.
 
 - Upstream functions used as references: SpectralSequences/sseq
   `Subquotient::from_parts`, `Subspace::reduce`, `Matrix::compute_kernel`, and
@@ -224,7 +230,7 @@ This entry covers `Subalgebra::a`, `Subalgebra::b_profile`, `Subalgebra::f`,
 
 - Upstream functions used as references: SpectralSequences/sseq
   `MilnorSubalgebra::new` and `MilnorSubalgebra::zero_algebra` in
-  [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/src/nassau.rs).
+  [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/src/nassau.rs).
 - Relationship: **implementation reference** for representing a finite
   subalgebra by a profile. The local constructors additionally support the
   named `A`, `B`, `F`, and `F'` families.
@@ -232,7 +238,7 @@ This entry covers `Subalgebra::a`, `Subalgebra::b_profile`, `Subalgebra::f`,
 ### `Subalgebra::profile_tau`
 
 - Upstream function: SpectralSequences/sseq `MilnorSubalgebra::top_degree` in
-  [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/src/nassau.rs).
+  [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/src/nassau.rs).
 - Relationship: **structural adaptation**. Both sum
   `(2^profile[i] - 1)(2^(i+1) - 1)` over the profile; the local function adds
   checked shifts and supports its broader profile representation.
@@ -240,20 +246,21 @@ This entry covers `Subalgebra::a`, `Subalgebra::b_profile`, `Subalgebra::f`,
 ### Packed-signature functions
 
 This entry covers `split_profile_signature_packed`,
-`profile_quotient_packed_unchecked`,
-`profile_signature_is_zero_packed_unchecked`,
-`attach_profile_signature_packed_unchecked`, `signature_packed`,
-`signature_index_packed`, and `profile_signature_index_packed`, together with
-their test-only checked wrappers.
+`profile_signature_is_zero_packed_unchecked`, and `signature_packed`.
 
 - Upstream functions used as references: SpectralSequences/sseq
   `MilnorSubalgebra::packed_signature` and
   `MilnorSubalgebra::signature_mask` in
-  [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/src/nassau.rs).
-- Relationship: **implementation reference**. Both exploit the low profile
-  bits of packed Milnor exponents to classify a signature. The local functions
-  also split, reattach, and directly index signatures, which are not operations
-  provided by the two upstream functions.
+  [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/src/nassau.rs).
+- Relationship: **structural adaptation**. As in sseq, these functions classify
+  a Milnor basis element by selecting the profile-controlled low bits of each
+  packed exponent coordinate and use the resulting signature in filtration
+  tests.
+- Local changes: the masks are applied to this project's fixed-field packed
+  layout rather than sseq's compiled `(mask, value)` representation;
+  `split_profile_signature_packed` also returns the complementary quotient;
+  wide profile entries are handled explicitly; and `signature_packed` extends
+  the representation to the local `F` and `F'` families.
 
 ### Signature enumeration and ordering
 
@@ -263,31 +270,50 @@ This entry covers `generate_signatures`, `compatible_bit_order`,
 - Upstream functions used as references: SpectralSequences/sseq
   `MilnorSubalgebra::iter_signatures`, `SignatureIterator::new`, and
   `SignatureIterator::next`, together with the signature order documented in
-  [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/src/nassau.rs).
-- Relationship: **implementation reference** and **shared mathematical
-  algorithm**. The local enumeration is recursive and then explicitly sorted;
-  sseq uses a mixed-radix iterator.
+  [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/src/nassau.rs).
+- Relationship: **structural adaptation** and **shared mathematical
+  algorithm**. The local `A` and `B` signatures retain the same mixed-radix
+  precedence: the first Milnor coordinate varies fastest, coordinate values
+  increase from zero, and the profile and total-degree bounds limit them.
+- Local changes: this project recursively materializes all signatures up to an
+  explicit degree bound and then sorts them, whereas sseq advances a mutable
+  mixed-radix iterator. The local ordering is represented by an explicit bit
+  list and is extended to the `F` and `F'` families.
 
-### Lower-line and subalgebra selection functions
+### Lower-line functions
 
-This entry covers `profile_d`, `profile_lower_ok`, `lower_line_applies`,
-`selection_condition_applies`, `selection_applicability`,
-`applicability_for_mode`, `lower_line_bound`, `Resolution::choose_subalgebra`,
-and `Resolution::selected_algorithm2_subalgebra_for_mode`.
+This entry covers `profile_d`, `profile_lower_ok`, `lower_line_applies`, and
+`lower_line_bound`.
 
 - Upstream functions used as references: SpectralSequences/sseq
   `MilnorSubalgebra::top_degree` and `MilnorSubalgebra::optimal_for` in
-  [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/src/nassau.rs).
+  [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/src/nassau.rs).
 - Relationship: **implementation reference** and **shared mathematical
-  algorithm**. The local selection supports more subalgebra families,
-  certification tables, priorities, and cost estimates than the upstream
-  function.
+  algorithm** for the published Nassau lower-line bounds.
+- Local changes: this project evaluates the formulas for its general profile
+  representation, adds checked arithmetic, and extends the conditions to its
+  `A`, `B`, `F`, and `F'` families and detailed-support data.
 
 ## `src/resolution.rs`
 
+### `Resolution::choose_subalgebra`
+
+- Upstream function: SpectralSequences/sseq
+  `MilnorSubalgebra::optimal_for` in
+  [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/src/nassau.rs).
+- Relationship: **structural adaptation** of the candidate-selection stage.
+  The upstream function traverses an ordered iterator and selects the last
+  candidate in its initial consecutive applicable prefix with
+  `take_while(...).last()`.
+- Local changes: this project accepts an explicit candidate list, applies
+  disable, force, and certification rules, estimates cost from the three
+  adjacent zero-signature basis dimensions, and resolves ties with a local
+  family priority instead of retaining the terminal candidate from that
+  upstream prefix.
+
 ### Free-module basis functions
 
-This entry covers `Resolution::build_basis`, `Resolution::basis_cached`, and
+This entry covers `Resolution::build_basis` and
 `FrozenResolutionView::build_basis`.
 
 - Upstream functions used as references: SpectralSequences/sseq
@@ -295,10 +321,15 @@ This entry covers `Resolution::build_basis`, `Resolution::basis_cached`, and
   `FreeModule::iter_gen_offsets`, `FreeModule::generator_offset`,
   `FreeModule::operation_generator_to_index`, and
   `FreeModule::index_to_op_gen` in
-  [`free_module.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/crates/algebra/src/module/free_module.rs).
-- Relationship: **implementation reference** for ordering algebra-basis
-  elements over graded free generators. The local project stores this mapping
-  in `BasisElem` values and caches it differently.
+  [`free_module.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/crates/algebra/src/module/free_module.rs).
+- Relationship: **structural adaptation**. Like sseq, the functions traverse
+  graded free generators in generator order, compute the complementary algebra
+  degree, and append the algebra basis in its established order.
+- Local changes: this project materializes `(packed coefficient, global
+  generator id)` as `BasisElem` values instead of maintaining sseq's offset
+  tables and index-conversion API. The frozen view also excludes generators
+  from the layer currently being computed and shares immutable data through
+  `Arc`.
 
 ### Differential application and matrix construction
 
@@ -311,19 +342,25 @@ This entry covers both implementations of
   `ModuleHomomorphism::get_matrix`,
   `ModuleHomomorphism::get_partial_matrix`, and
   `MilnorSubalgebra::signature_matrix` in
-  [`free_module_homomorphism.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/crates/algebra/src/module/homomorphism/free_module_homomorphism.rs),
-  [`homomorphism/mod.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/crates/algebra/src/module/homomorphism/mod.rs),
-  and [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/src/nassau.rs).
-- Relationship: **implementation reference**. Both obtain a differential matrix
-  by applying the stored image of each free generator and then restrict it to a
-  signature. The local implementation uses packed coefficients, column
-  matrices, and project-specific caches.
+  [`free_module_homomorphism.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/crates/algebra/src/module/homomorphism/free_module_homomorphism.rs),
+  [`homomorphism/mod.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/crates/algebra/src/module/homomorphism/mod.rs),
+  and [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/src/nassau.rs).
+- Relationship: **structural adaptation**. Both form a matrix by applying the
+  stored image of each free generator to every free-module basis element, then
+  select signature-specific domain and target bases and construct the
+  restricted matrix.
+- Local changes: this project multiplies packed coefficients, looks up target
+  rows through `(coefficient, generator)` maps, stores dense `F_2` columns, and
+  adds product, basis, routing, and matrix caches. Signature columns can be
+  built in parallel, and the frozen implementation reads an immutable layer
+  snapshot. The local code also reports missing terms and signature-order
+  violations explicitly.
 
 ### `Resolution::step_algorithm2`
 
 - Upstream function: SpectralSequences/sseq
   `Resolution::step_resolution_with_subalgebra` in
-  [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/src/nassau.rs).
+  [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/src/nassau.rs).
 - Relationship: **structural adaptation** and **shared mathematical algorithm**.
   The local function retains the upstream function's main stages: compute
   signature-zero homology, turn its representatives into candidate generator
@@ -341,7 +378,7 @@ This entry covers `step_naive` and `naive_homology_representatives`.
 
 - Upstream function used as a reference: SpectralSequences/sseq
   `Resolution::step_resolution` in
-  [`ext/src/resolution.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/src/resolution.rs).
+  [`ext/src/resolution.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/src/resolution.rs).
 - Relationship: **implementation reference** and **shared mathematical
   algorithm**. Both add free generators that kill the relevant homology. The
   local sphere-resolution path computes `kernel(d) / image(d_next)` directly
@@ -349,9 +386,9 @@ This entry covers `step_naive` and `naive_homology_representatives`.
 
 ### Signature-restricted helpers used by `step_algorithm2`
 
-This entry covers `d_matrix_signature_cached`, `basis_signature_cached`,
-`coeff_signature_basis_cached`, `basis_signature_index_cached`,
-`basis_signature_routing_cached`, and `extract_signature_vector`.
+This entry covers `basis_signature_cached`, `coeff_signature_basis_cached`,
+`basis_signature_index_cached`, `basis_signature_routing_cached`, and
+`extract_signature_vector`.
 
 - Upstream functions used as references: SpectralSequences/sseq
   `MilnorSubalgebra::signature_mask`, `MilnorSubalgebra::signature_matrix`, and
@@ -399,11 +436,11 @@ This entry covers `compute_from_cursor_fixed_t_batch_with_progress`,
 
 - Upstream functions used as references:
   - SSeqCpp `Resolve` in
-    [`Adams/groebner_res.cpp`](https://github.com/WayneLin92/SSeqCpp/blob/master/Adams/groebner_res.cpp).
+    [`Adams/groebner_res.cpp`](https://github.com/WayneLin92/SSeqCpp/blob/23d12c973db2b294a6c00c15bd106e70b0af3fa6/Adams/groebner_res.cpp).
   - SpectralSequences/sseq `Resolution::compute_through_bidegree_with_callback`
     and its Nassau resolution computation loop in
-    [`ext/src/resolution.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/src/resolution.rs)
-    and [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/master/ext/src/nassau.rs).
+    [`ext/src/resolution.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/src/resolution.rs)
+    and [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/src/nassau.rs).
 - Relationship: **structural adaptation** for SSeqCpp's outer fixed-`t` loop,
   parallel per-`s` work, layer barrier, and post-barrier commit; and
   **implementation reference** for sseq's dependency-aware parallel resolution
@@ -412,17 +449,25 @@ This entry covers `compute_from_cursor_fixed_t_batch_with_progress`,
 
 ### Sequential computation loop
 
-This entry covers `compute_from_cursor`, `compute_from_cursor_with_progress`,
-and `compute_step`.
+This entry covers `compute_from_cursor_with_progress`.
 
-- Upstream functions used as references: SpectralSequences/sseq
-  `Resolution::compute_through_bidegree` and
-  `Resolution::compute_through_bidegree_with_callback` in its ordinary and
-  Nassau resolution implementations.
-- Relationship: **implementation reference**. The local functions traverse the
-  triangular `(s,t)` range, resume from a cursor, and dispatch between the naive
-  and signature-filtered steps. The checkpoint cursor and per-layer Milnor
-  basis growth are local behavior.
+- Upstream functions used as references:
+  - The Nassau implementation of SpectralSequences/sseq
+    `Resolution::compute_through_bidegree` in
+    [`ext/src/nassau.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/src/nassau.rs).
+  - The ordinary implementation of SpectralSequences/sseq
+    `Resolution::compute_through_bidegree_with_callback` in
+    [`ext/src/resolution.rs`](https://github.com/SpectralSequences/sseq/blob/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext/src/resolution.rs).
+- Relationship: **structural adaptation** of the Nassau function's
+  internal-degree-major traversal with homological degree in the inner loop.
+  The ordinary callback function is an **implementation reference** only for
+  notifying the caller after a bidegree; its dependency-aware scheduler is not
+  retained here.
+- Local changes: this project resumes from a checkpoint cursor, grows the
+  Milnor basis and subalgebra signatures one internal-degree layer at a time,
+  enforces its triangular task bound, and dispatches its own computation modes
+  and fallback policies. The callback receives project-specific progress and
+  checkpoint state.
 
 ## Published Nassau algorithm and `cnassau/steenrod`
 

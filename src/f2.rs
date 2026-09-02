@@ -136,8 +136,6 @@ impl Iterator for Ones<'_> {
 }
 
 #[cfg(test)]
-// Provenance: test wrapper around the structurally adapted kernel construction
-// documented on `kernel_with_label` and in PROVENANCE.md.
 pub fn kernel(columns: &[BitVec], target_dim: usize) -> Vec<BitVec> {
     kernel_with_label(columns, target_dim, None)
 }
@@ -281,8 +279,6 @@ impl HomologyRepresentativeBatches {
         self.cycles.is_empty()
     }
 
-    // Provenance: local batching extension of the homology construction
-    // referenced from sseq; batching itself is not an upstream translation.
     pub fn next_batch(&mut self, batch_len: usize) -> Option<Vec<BitVec>> {
         if self.next_cycle >= self.cycles.len() {
             return None;
@@ -508,8 +504,6 @@ impl LinearSolver {
 }
 
 impl ImageBasis {
-    // Provenance: structural adaptation of SSeqCpp `GetInvMap`/`SetLinearMap*`
-    // and sseq's quasi-inverse construction. See PROVENANCE.md.
     fn new(target_dim: usize, domain_dim: usize) -> Self {
         Self {
             pivots: vec![None; target_dim],
@@ -581,8 +575,6 @@ impl ImageBasis {
 }
 
 impl XorBasis {
-    // Provenance: structural adaptation of SSeqCpp `GetSpace` and sseq
-    // `Subspace` construction; dense BitVec storage is local.
     fn new(ambient_dim: usize) -> Self {
         Self {
             pivots: vec![None; ambient_dim],
