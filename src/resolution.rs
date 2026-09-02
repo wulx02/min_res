@@ -1,3 +1,6 @@
+// Function-level upstream relationships are recorded beside the affected
+// routines below and in PROVENANCE.md.
+
 use std::cell::Cell;
 use std::cmp::Reverse;
 use std::collections::BTreeMap;
@@ -608,6 +611,8 @@ impl FrozenResolutionView {
     }
 
     fn build_basis(&self, s: usize) -> Vec<BasisElem> {
+        // Implementation reference: sseq `FreeModule::compute_basis` and its
+        // generator/operation index mapping. See PROVENANCE.md.
         let mut out = Vec::new();
         let Some(gens) = self.gens_by_s.get(s) else {
             return out;
@@ -687,6 +692,8 @@ impl FrozenMatrixBuilder<'_> {
     }
 
     fn d_matrix(&mut self, s: usize) -> Result<LinearMap, String> {
+        // Function-level references: sseq `ModuleHomomorphism::get_matrix` and
+        // `FreeModuleHomomorphism::apply_to_basis_element`.
         let domain = self.view.build_basis(s);
         let t = self.view.frozen_t;
         if s == 0 {
@@ -1221,11 +1228,12 @@ impl Resolution {
             self.prewarm_fixed_t_choice_dims(t, &active_s, &inner);
         }
 
-        // The fixed-t organization--parallel work across homological degrees,
-        // followed by a layer barrier--was informed by SSeqCpp's Adams
-        // resolution driver. The Rayon scheduling, frozen views, cache
-        // management, and Grid extensions below are separate implementations.
-        // See THIRD_PARTY_NOTICES.md and LICENSE-APACHE.
+        // Codex structurally adapted this fixed-t organization--parallel
+        // work across homological degrees followed by a layer barrier and
+        // commit--from SSeqCpp's Adams `Resolve` driver. The Rayon worker
+        // groups, frozen views, cache policies, load balancing, and Grid
+        // extensions build on that organization. See PROVENANCE.md,
+        // THIRD_PARTY_NOTICES.md, and LICENSE-APACHE.
         let mut completed_group_ranges = Vec::<(usize, usize)>::new();
         let (mut results, mut worker_caches) = if matches!(&inner, ComputeMode::Naive) {
             let view = frozen_view
@@ -3282,6 +3290,8 @@ impl Resolution {
     }
 
     fn step_naive(&mut self, s: usize, t: usize) -> Result<usize, String> {
+        // Implementation reference: sseq `Resolution::step_resolution`; this
+        // local sphere-resolution path computes homology directly.
         let reps = self.naive_homology_representatives(s, t)?;
         let added = reps.len();
         for rep in reps {
@@ -3297,6 +3307,10 @@ impl Resolution {
         t: usize,
         subalgebra: &Subalgebra,
     ) -> Result<usize, String> {
+        // The overall sequence here is Nassau's Algorithm 2 and also appears in
+        // SpectralSequences/sseq's step_resolution_with_subalgebra: compute
+        // signature-zero homology, apply the full differential, and correct the
+        // error one signature at a time. See PROVENANCE.md.
         let profile_detail = std::env::var_os("EXT_PROFILE_SIGNATURE_DETAIL").is_some();
         let profile_verbose = std::env::var_os("EXT_PROFILE_MEMORY_VERBOSE").is_some();
         let total_timer = Instant::now();
@@ -4026,6 +4040,8 @@ impl Resolution {
     }
 
     fn d_matrix(&mut self, s: usize, t: usize) -> Result<LinearMap, String> {
+        // Function-level references: sseq `ModuleHomomorphism::get_matrix` and
+        // `FreeModuleHomomorphism::apply_to_basis_element`.
         let domain = self.basis_cached(s, t);
         if s == 0 {
             let target_dim = usize::from(t == 0);
@@ -4068,6 +4084,8 @@ impl Resolution {
         subalgebra: &Subalgebra,
         sig_index: usize,
     ) -> Result<LinearMap, String> {
+        // Structural reference: sseq `MilnorSubalgebra::signature_matrix` and
+        // `ModuleHomomorphism::get_partial_matrix`. See PROVENANCE.md.
         let profile_detail = std::env::var_os("EXT_PROFILE_SIGNATURE_DETAIL").is_some();
         let matrix_timer = Instant::now();
         let domain_timer = Instant::now();
@@ -4625,6 +4643,8 @@ impl Resolution {
     }
 
     fn build_basis(&self, s: usize, t: usize) -> Vec<BasisElem> {
+        // Implementation reference: sseq `FreeModule::compute_basis` and its
+        // generator/operation index mapping. See PROVENANCE.md.
         let mut out = Vec::new();
         let Some(gens) = self.gens_by_s.get(s) else {
             return out;
@@ -4690,6 +4710,8 @@ impl Resolution {
         subalgebra: &Subalgebra,
         sig_index: usize,
     ) -> Arc<Vec<BasisElem>> {
+        // Structural reference: sseq `MilnorSubalgebra::signature_mask`. This
+        // function materializes and caches the corresponding local basis.
         let key = self.signature_basis_key(s, t, subalgebra, sig_index);
         if let Some(cached) = self.basis_signature_cache.get(&key) {
             return Arc::clone(cached);
@@ -5000,6 +5022,9 @@ impl Resolution {
     }
 
     fn add_generator(&mut self, s: usize, t: usize, mut differential: Vec<ModuleTerm>) -> usize {
+        // Implementation references: sseq `Resolution::add_generators`,
+        // `FreeModule::add_generators`, and
+        // `FreeModuleHomomorphism::add_generators_from_rows`.
         while self.gens_by_s.len() <= s {
             self.gens_by_s.push(Vec::new());
         }

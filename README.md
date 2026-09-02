@@ -229,27 +229,33 @@ cargo build --release --locked
 
 ## Acknowledgments and third-party code
 
-The Steenrod-algebra infrastructure in this project was informed by Weinan
-Lin's [SSeqCpp](https://github.com/WayneLin92/SSeqCpp), including its compact
-Milnor-monomial representation and the fixed-internal-degree organization used
-for parallel computation. The fast Milnor-basis multiplication kernel in
-`src/milnor.rs` is a direct Rust adaptation of SSeqCpp's `MulMilnorV3`.
+This project was implemented by OpenAI Codex at the direction of the repository
+owner. During development, Codex translated or
+adapted some upstream code and used other code, designs, and mathematical
+methods as references:
 
-This project uses a different packed bit layout and implements its Rayon
-schedulers, worker caches, and Grid orchestration separately. We thank Weinan
-Lin for making SSeqCpp publicly available. The SSeqCpp-derived portions are
-used under the Apache License 2.0. See
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
-[LICENSE-APACHE](LICENSE-APACHE) for details.
+1. [SSeqCpp](https://github.com/WayneLin92/SSeqCpp), by Weinan Lin. The fast
+   Milnor multiplication kernel is a direct Rust adaptation of SSeqCpp's
+   `MulMilnorV3`; additional function-level relationships are documented in
+   `PROVENANCE.md`.
+2. The `ext` implementation in
+   [SpectralSequences/sseq](https://github.com/SpectralSequences/sseq), which
+   Codex used as a structural and implementation reference for the specific
+   functions listed in `PROVENANCE.md`.
+3. Christian Nassau's
+   [signature-filtration algorithm](https://arxiv.org/abs/1910.04063) and the
+   related [cnassau/steenrod](https://github.com/cnassau/steenrod)
+   implementation, which Codex used as mathematical and implementation
+   references.
 
-The minimal-resolution algorithm in this repository is based on Nassau's
-signature-filtration method. It is distinct from SSeqCpp's Gröbner-basis
-resolution implementation.
+See [PROVENANCE.md](PROVENANCE.md) for the function-by-function account and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for licenses and attribution.
 
 ## License
 
 Original code in this project is licensed under the MIT License. The
-SSeqCpp-derived portions are licensed under the Apache License 2.0.
+portions derived from SSeqCpp or SpectralSequences/sseq are licensed under the
+Apache License 2.0.
 The combined distribution is therefore identified as `MIT AND Apache-2.0`.
 See [LICENSE](LICENSE), [LICENSE-APACHE](LICENSE-APACHE), and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

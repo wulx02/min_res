@@ -1,3 +1,6 @@
+// Function-level upstream relationships are recorded beside the affected
+// routines below and in PROVENANCE.md.
+
 use std::{
     cmp::Ordering,
     env, fmt, fs,
@@ -366,6 +369,8 @@ impl Subalgebra {
         bit_order: Vec<(usize, u32)>,
         max_signature_degree: Option<usize>,
     ) -> Result<Self, String> {
+        // Implementation reference: sseq `MilnorSubalgebra::new` together with
+        // its signature iterator. See PROVENANCE.md.
         let mut entries = vec![0; profile.len()];
         let mut signatures = Vec::new();
         generate_signatures(
@@ -583,6 +588,7 @@ impl Subalgebra {
     }
 
     pub fn profile_tau(&self) -> usize {
+        // Structural reference: sseq `MilnorSubalgebra::top_degree`.
         self.profile
             .iter()
             .enumerate()
@@ -612,6 +618,8 @@ impl Subalgebra {
     }
 
     pub fn profile_lower_ok(&self, s: usize, t: usize) -> bool {
+        // Mathematical/selection reference: sseq
+        // `MilnorSubalgebra::top_degree` and `optimal_for`.
         let tau = self.profile_tau();
         let d = self.profile_d();
         t > d.saturating_mul(s).saturating_add(tau)
@@ -646,6 +654,8 @@ impl Subalgebra {
     }
 
     pub fn split_profile_signature_packed(&self, x: CoeffKey) -> Option<(CoeffKey, CoeffKey)> {
+        // Implementation references: sseq `MilnorSubalgebra::packed_signature`
+        // and `signature_mask`; this local API also returns the quotient part.
         self.profile_cache_key()?;
         let mut sig = [0_u32; PACKED_ENTRY_LIMIT];
         let mut quotient = [0_u32; PACKED_ENTRY_LIMIT];
@@ -1530,6 +1540,8 @@ fn generate_signatures(
     entries: &mut [u32],
     signatures: &mut Vec<Milnor>,
 ) {
+    // Function-level references: sseq `MilnorSubalgebra::iter_signatures` and
+    // `SignatureIterator::next`; this implementation uses recursion and sort.
     if index == profile.len() {
         signatures.push(Milnor::new(entries.to_vec()));
         return;

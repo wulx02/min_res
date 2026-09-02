@@ -5,10 +5,8 @@ use crate::fast_hash::{FastHashMap as HashMap, FastHashSet as HashSet};
 
 pub type CoeffKey = u64;
 
-// The compact Milnor-monomial representation and its exponent-vector
-// conversion interface were informed by Weinan Lin's MMilnor/Xi/ToXi design
-// in SSeqCpp. This implementation uses a different, contiguous-field bit
-// layout. See THIRD_PARTY_NOTICES.md and LICENSE-APACHE.
+// Function-level upstream relationships are recorded beside the affected
+// routines below and in PROVENANCE.md.
 pub const PACKED_ENTRY_LIMIT: usize = 9;
 pub const PACKED_BASIS_UNCHECKED_MAX_DEGREE: usize = 512;
 const PACKED_ENTRY_WIDTHS: [usize; PACKED_ENTRY_LIMIT] = [10, 8, 7, 6, 5, 4, 3, 2, 1];
@@ -152,6 +150,9 @@ pub fn tau_a(n: usize) -> usize {
 }
 
 pub fn pack_entries(entries: &[u32]) -> Option<CoeffKey> {
+    // Implementation references: SSeqCpp `MMilnor::Xi`/`MMilnor::ToXi` and
+    // sseq's `PPart` packing functions. This bit layout is not compatible with
+    // either upstream representation. See PROVENANCE.md.
     if entries.len() > PACKED_ENTRY_LIMIT {
         return None;
     }
@@ -219,6 +220,8 @@ pub fn basis_keys_through_degree(max_degree: usize) -> Vec<Vec<CoeffKey>> {
 }
 
 pub fn basis_of_degree(degree: usize) -> Vec<Milnor> {
+    // Function-level references: sseq `MilnorAlgebra::compute_ppart` and
+    // `MilnorAlgebra::generate_basis_2`; the enumeration body here differs.
     if degree == 0 {
         return vec![Milnor::one()];
     }
@@ -382,6 +385,7 @@ pub fn multiply_packed_fast_bounded_matching<F>(
 where
     F: Fn(CoeffKey) -> bool,
 {
+    // This is a local wrapper around the SSeqCpp-derived V3 kernel below.
     let mut out = Vec::new();
     multiply_packed_fast_raw_for_each_bounded_degree(left, right, product_degree_bound, |term| {
         if keep(term) {
@@ -515,6 +519,8 @@ pub(crate) fn bounded_product_width(product_degree_bound: usize) -> usize {
 }
 
 fn sort_packed_mod2(terms: &mut Vec<CoeffKey>) {
+    // Function-level reference: SSeqCpp `SortMod2(MMilnor1d&)`. Both sort and
+    // cancel sparse F2 terms; this body counts complete runs. See PROVENANCE.md.
     if terms.len() < 2 {
         return;
     }
@@ -673,9 +679,10 @@ fn pack_xi_9(xi: &[u32; 9]) -> CoeffKey {
 }
 
 #[inline]
-// The optimized matrix-enumeration kernel from `max_mask` through the
-// `define_mul_packed_xi_v3_for_each!` instantiations below is a Rust adaptation
-// of Weinan Lin's `max_mask` and `MulMilnorV3` implementation in SSeqCpp.
+// Codex directly adapted the optimized matrix-enumeration kernel from
+// `max_mask` through the `define_mul_packed_xi_v3_for_each!` instantiations
+// below from Weinan Lin's `max_mask` and `MulMilnorV3` implementation in
+// SSeqCpp.
 //
 // This adaptation changes the representation and interface: it operates on
 // this project's packed Milnor coefficients, supports widths 1 through 9,
@@ -981,6 +988,10 @@ fn multiply_packed_entries_with_row_cache_internal<F>(
 where
     F: Fn(CoeffKey) -> bool,
 {
+    // Function-level references: sseq `PPartMultiplier::{new_from_allocation,
+    // next_val, update, next}` and the multiplication code in
+    // cnassau/steenrod. This recursive body is shared mathematics/reference
+    // use, not a direct adaptation; it checks the adapted V3 kernel.
     if left_entries.is_empty() {
         return pack_entries(right_entries)
             .filter(|&packed| keep(packed))

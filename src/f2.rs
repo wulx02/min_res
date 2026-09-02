@@ -1,3 +1,6 @@
+// Function-level upstream relationships are recorded beside the affected
+// routines below and in PROVENANCE.md.
+
 use crate::memory_probe::log_process_memory;
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -136,6 +139,8 @@ pub fn kernel(columns: &[BitVec], target_dim: usize) -> Vec<BitVec> {
 }
 
 fn kernel_with_label(columns: &[BitVec], target_dim: usize, label: Option<&str>) -> Vec<BitVec> {
+    // Function-level references: SSeqCpp `SetLinearMap` and sseq
+    // `Matrix::compute_kernel`. See PROVENANCE.md.
     let domain_dim = columns.len();
     if domain_dim == 0 {
         return Vec::new();
@@ -179,6 +184,8 @@ pub fn quotient_representatives(
     mod_out_by: &[BitVec],
     ambient_dim: usize,
 ) -> Vec<BitVec> {
+    // Function-level references: SSeqCpp `QuotientSpace` and sseq
+    // `Subquotient::from_parts`. See PROVENANCE.md.
     let mut basis = XorBasis::new(ambient_dim);
     for vector in mod_out_by {
         basis.insert(vector.clone());
@@ -194,6 +201,7 @@ pub fn quotient_representatives(
 }
 
 pub fn apply_columns(columns: &[BitVec], target_dim: usize, vector: &BitVec) -> BitVec {
+    // Function-level references: SSeqCpp `GetImage` and sseq `Matrix::apply`.
     debug_assert_eq!(columns.len(), vector.len());
     let mut out = BitVec::new(target_dim);
     for i in vector.ones() {
@@ -292,6 +300,8 @@ pub fn homology_representative_batches_with_label(
     ambient_dim: usize,
     label: Option<&str>,
 ) -> HomologyRepresentativeBatches {
+    // Function-level references: sseq `Subquotient::from_parts`,
+    // `Subspace::reduce`, and `Matrix::compute_kernel`. See PROVENANCE.md.
     if ambient_dim == 0 {
         return HomologyRepresentativeBatches {
             quotient_basis: Vec::new(),
@@ -447,6 +457,8 @@ struct ImageBasis {
 }
 
 impl LinearSolver {
+    // Structural references: SSeqCpp `GetInvMap`/`GetImage`/`GetInvImage`
+    // and sseq `Matrix::compute_quasi_inverse`/`QuasiInverse::apply`.
     pub fn new(columns: &[BitVec], target_dim: usize) -> Self {
         let domain_dim = columns.len();
         let mut basis = ImageBasis::new(target_dim, domain_dim);
@@ -483,6 +495,8 @@ impl LinearSolver {
 }
 
 impl ImageBasis {
+    // Structural references: SSeqCpp `GetInvMap` and `SetLinearMap*`, and
+    // sseq's quasi-inverse and kernel construction. See PROVENANCE.md.
     fn new(target_dim: usize, domain_dim: usize) -> Self {
         Self {
             pivots: vec![None; target_dim],
@@ -546,6 +560,8 @@ impl ImageBasis {
 }
 
 impl XorBasis {
+    // Structural references: SSeqCpp `Residue`/`AddToSpace`/`GetSpace` and
+    // sseq `Subspace::reduce`/`Subspace::add_vector`. See PROVENANCE.md.
     fn new(ambient_dim: usize) -> Self {
         Self {
             pivots: vec![None; ambient_dim],
