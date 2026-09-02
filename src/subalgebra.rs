@@ -1,5 +1,7 @@
-// Function-level upstream relationships are recorded beside the affected
-// routines below and in PROVENANCE.md.
+// Portions of this file were structurally adapted or implemented with reference
+// to SpectralSequences/sseq and Nassau's algorithm, then modified for this
+// project. Each affected routine is labeled below; see PROVENANCE.md,
+// THIRD_PARTY_NOTICES.md, and LICENSE-APACHE.
 
 use std::{
     cmp::Ordering,
@@ -270,6 +272,8 @@ pub struct Subalgebra {
 }
 
 impl Subalgebra {
+    // Provenance: implementation reference to sseq `MilnorSubalgebra::new`;
+    // the named A-family constructor and validation are local.
     pub fn a(n: usize) -> Result<Self, String> {
         if n > 5 {
             return Err("A(n) is limited to n <= 5 in this implementation".into());
@@ -294,6 +298,8 @@ impl Subalgebra {
         Self::b_profile("B3321", vec![3, 3, 2, 1])
     }
 
+    // Provenance: implementation reference to sseq `MilnorSubalgebra::new`;
+    // registered B profiles and labels are local extensions.
     pub fn b_profile(label: impl Into<String>, profile: Vec<u32>) -> Result<Self, String> {
         validate_finite_profile(&profile)?;
         validate_registered_b_profile(&profile)?;
@@ -309,6 +315,8 @@ impl Subalgebra {
         )
     }
 
+    // Provenance: uses the profile/signature design referenced from sseq
+    // `MilnorSubalgebra`; the F-family construction and degree bound are local.
     pub fn f(n: usize, max_degree: usize) -> Result<Self, String> {
         if n == 0 {
             return Err("F(n) expects n >= 1".into());
@@ -333,6 +341,8 @@ impl Subalgebra {
         Ok(subalgebra)
     }
 
+    // Provenance: uses the profile/signature design referenced from sseq
+    // `MilnorSubalgebra`; the F'-family construction and ordering are local.
     pub fn fprime(n: usize, max_degree: usize) -> Result<Self, String> {
         if n == 0 {
             return Err("F'(n) expects n >= 1".into());
@@ -361,6 +371,8 @@ impl Subalgebra {
         Ok(subalgebra)
     }
 
+    // Provenance: implementation reference to sseq `MilnorSubalgebra::new`
+    // and its signature iterator; local families and bounds differ.
     fn from_profile(
         family: Family,
         n: usize,
@@ -369,8 +381,6 @@ impl Subalgebra {
         bit_order: Vec<(usize, u32)>,
         max_signature_degree: Option<usize>,
     ) -> Result<Self, String> {
-        // Implementation reference: sseq `MilnorSubalgebra::new` together with
-        // its signature iterator. See PROVENANCE.md.
         let mut entries = vec![0; profile.len()];
         let mut signatures = Vec::new();
         generate_signatures(
@@ -385,6 +395,8 @@ impl Subalgebra {
         Self::from_signatures(family, n, label, profile, bit_order, signatures)
     }
 
+    // Provenance: implementation reference to sseq `MilnorSubalgebra::new`;
+    // the packed index and validation are local. See PROVENANCE.md.
     fn from_signatures(
         family: Family,
         n: usize,
@@ -587,8 +599,9 @@ impl Subalgebra {
             .expect("profile dimension overflow")
     }
 
+    // Provenance: structural adaptation of sseq
+    // `MilnorSubalgebra::top_degree`; checked arithmetic is local.
     pub fn profile_tau(&self) -> usize {
-        // Structural reference: sseq `MilnorSubalgebra::top_degree`.
         self.profile
             .iter()
             .enumerate()
@@ -602,6 +615,8 @@ impl Subalgebra {
             .sum()
     }
 
+    // Provenance: implementation reference and shared Nassau lower-line
+    // mathematics with sseq `MilnorSubalgebra::{top_degree, optimal_for}`.
     pub fn profile_d(&self) -> usize {
         self.profile
             .iter()
@@ -617,9 +632,9 @@ impl Subalgebra {
             .unwrap_or(0)
     }
 
+    // Provenance: implementation reference and shared Nassau lower-line
+    // mathematics with sseq `MilnorSubalgebra::optimal_for`.
     pub fn profile_lower_ok(&self, s: usize, t: usize) -> bool {
-        // Mathematical/selection reference: sseq
-        // `MilnorSubalgebra::top_degree` and `optimal_for`.
         let tau = self.profile_tau();
         let d = self.profile_d();
         t > d.saturating_mul(s).saturating_add(tau)
@@ -653,9 +668,10 @@ impl Subalgebra {
         }
     }
 
+    // Provenance: implementation reference to sseq
+    // `MilnorSubalgebra::{packed_signature, signature_mask}`; this also splits
+    // off the quotient using the project's own packed layout.
     pub fn split_profile_signature_packed(&self, x: CoeffKey) -> Option<(CoeffKey, CoeffKey)> {
-        // Implementation references: sseq `MilnorSubalgebra::packed_signature`
-        // and `signature_mask`; this local API also returns the quotient part.
         self.profile_cache_key()?;
         let mut sig = [0_u32; PACKED_ENTRY_LIMIT];
         let mut quotient = [0_u32; PACKED_ENTRY_LIMIT];
@@ -679,6 +695,8 @@ impl Subalgebra {
     }
 
     #[cfg(test)]
+    // Provenance: checked test wrapper around the signature operations
+    // referenced from sseq `MilnorSubalgebra::{packed_signature, signature_mask}`.
     pub fn split_signature_packed(&self, x: CoeffKey) -> Option<(CoeffKey, CoeffKey)> {
         let signature = self.signature_packed(x);
         let quotient = self.quotient_part_packed(x)?;
@@ -686,6 +704,8 @@ impl Subalgebra {
     }
 
     #[cfg(test)]
+    // Provenance: checked test helper for the signature/quotient representation
+    // referenced from sseq `MilnorSubalgebra::packed_signature`.
     pub fn quotient_part_packed(&self, x: CoeffKey) -> Option<CoeffKey> {
         let signature = self.signature_packed(x);
         let mut quotient = [0_u32; PACKED_ENTRY_LIMIT];
@@ -698,6 +718,8 @@ impl Subalgebra {
     }
 
     #[cfg(test)]
+    // Provenance: local round-trip test helper for the signature representation
+    // referenced from sseq `MilnorSubalgebra::packed_signature`.
     pub fn compose_signature_with_quotient_packed(
         &self,
         sig: CoeffKey,
@@ -713,16 +735,22 @@ impl Subalgebra {
     }
 
     #[cfg(test)]
+    // Provenance: checked test wrapper around the signature representation
+    // referenced from sseq `MilnorSubalgebra::signature_mask`.
     pub fn signature_is_zero_packed(&self, x: CoeffKey) -> bool {
         self.signature_packed(x) == 0
     }
 
     #[cfg(test)]
+    // Provenance: checked test wrapper around the signature representation
+    // referenced from sseq `MilnorSubalgebra::packed_signature`.
     pub fn same_signature_packed(&self, x: CoeffKey, sig: CoeffKey) -> bool {
         self.signature_packed(x) == sig
     }
 
     #[cfg(test)]
+    // Provenance: local basis filter using the signature representation
+    // referenced from sseq `MilnorSubalgebra::signature_mask`.
     pub fn quotient_basis(&self, degree: usize) -> Vec<CoeffKey> {
         basis_of_degree(degree)
             .into_iter()
@@ -732,16 +760,22 @@ impl Subalgebra {
     }
 
     #[cfg(test)]
+    // Provenance: local counting wrapper around `quotient_basis`; the
+    // underlying signature representation is referenced from sseq.
     pub fn quotient_count(&self, degree: usize) -> usize {
         self.quotient_basis(degree).len()
     }
 
     #[cfg(test)]
+    // Provenance: checked wrapper around the quotient operation referenced
+    // from sseq `MilnorSubalgebra::packed_signature`.
     pub fn profile_quotient_packed(&self, x: CoeffKey) -> Option<CoeffKey> {
         self.profile_cache_key()?;
         Some(self.profile_quotient_packed_unchecked(x))
     }
 
+    // Provenance: implementation reference to sseq
+    // `MilnorSubalgebra::{packed_signature, signature_mask}`; local layout.
     pub fn profile_quotient_packed_unchecked(&self, x: CoeffKey) -> CoeffKey {
         let mut quotient = [0_u32; PACKED_ENTRY_LIMIT];
         for (i, quotient_entry) in quotient.iter_mut().enumerate() {
@@ -757,6 +791,8 @@ impl Subalgebra {
         pack_padded_entries_unchecked(&quotient)
     }
 
+    // Provenance: implementation reference to sseq
+    // `MilnorSubalgebra::signature_mask`; local packed-bit test.
     pub fn profile_signature_is_zero_packed_unchecked(&self, x: CoeffKey) -> bool {
         debug_assert!(self.profile_cache_key().is_some());
         for i in 0..PACKED_ENTRY_LIMIT {
@@ -774,6 +810,8 @@ impl Subalgebra {
         true
     }
 
+    // Provenance: local inverse-style helper for the signature representation
+    // referenced from sseq `MilnorSubalgebra::packed_signature`.
     pub fn attach_profile_signature_packed_unchecked(
         &self,
         sig: CoeffKey,
@@ -792,6 +830,8 @@ impl Subalgebra {
     }
 
     #[cfg(test)]
+    // Provenance: checked Milnor-value form of the signature representation
+    // referenced from sseq `MilnorSubalgebra::packed_signature`.
     pub fn signature(&self, x: &Milnor) -> Milnor {
         let entries = match self.family {
             Family::A | Family::B | Family::F => (0..self.profile.len())
@@ -826,6 +866,8 @@ impl Subalgebra {
     }
 
     #[cfg(test)]
+    // Provenance: checked wrapper around local signature indexing; the
+    // signature representation is referenced from sseq.
     pub fn signature_index(&self, x: &Milnor) -> usize {
         let packed = x
             .packed()
@@ -833,6 +875,8 @@ impl Subalgebra {
         self.signature_index_packed(packed)
     }
 
+    // Provenance: implementation reference to sseq
+    // `MilnorSubalgebra::{packed_signature, signature_mask}`; indexing is local.
     pub fn signature_index_packed(&self, x: CoeffKey) -> usize {
         if matches!(self.family, Family::A | Family::B) {
             return self.profile_signature_index_packed(x);
@@ -844,6 +888,8 @@ impl Subalgebra {
             .unwrap_or_else(|| panic!("missing packed signature {sig} for {}", self.name()))
     }
 
+    // Provenance: local index encoding for signatures represented following
+    // sseq `MilnorSubalgebra::{packed_signature, signature_mask}`.
     fn profile_signature_index_packed(&self, x: CoeffKey) -> usize {
         let mut index = 0_usize;
         for &(j, bit) in &self.bit_order {
@@ -853,6 +899,8 @@ impl Subalgebra {
         index
     }
 
+    // Provenance: implementation reference to sseq
+    // `MilnorSubalgebra::packed_signature`; F/F' handling is local.
     fn signature_packed(&self, x: CoeffKey) -> CoeffKey {
         let mut entries = [0_u32; PACKED_ENTRY_LIMIT];
         for (i, &profile_entry) in self.profile.iter().enumerate() {
@@ -890,6 +938,8 @@ impl Subalgebra {
     /// task `s` at internal degree `t`. In fixed-t layer code this `s` is the
     /// task index for `H_s(D^(t))`, not the homological degree `s + 1` of
     /// generators produced by the task.
+    // Provenance: implementation reference and shared Nassau lower-line
+    // mathematics with sseq `MilnorSubalgebra::{top_degree, optimal_for}`.
     pub fn lower_line_applies(&self, s: usize, t: usize) -> bool {
         match self.family {
             Family::A => {
@@ -928,16 +978,22 @@ impl Subalgebra {
     }
 
     /// Uses the same task `s` convention as `lower_line_applies`.
+    // Provenance: local wrapper around the Nassau lower-line selection
+    // referenced from sseq `MilnorSubalgebra::optimal_for`.
     pub fn selection_condition_applies(&self, s: usize, t: usize) -> bool {
         self.applicability_for_mode(s, t, subalgebra_selection_mode())
             .usable
     }
 
     /// Uses the same task `s` convention as `lower_line_applies`.
+    // Provenance: local wrapper around the Nassau lower-line selection
+    // referenced from sseq `MilnorSubalgebra::optimal_for`.
     pub fn selection_applicability(&self, s: usize, t: usize) -> SubalgebraApplicability {
         self.applicability_for_mode(s, t, subalgebra_selection_mode())
     }
 
+    // Provenance: local mode dispatcher around the Nassau lower-line selection
+    // referenced from sseq `MilnorSubalgebra::optimal_for`.
     pub fn applicability_for_mode(
         &self,
         s: usize,
@@ -951,6 +1007,8 @@ impl Subalgebra {
     }
 
     /// Bound for the fixed-t task index `s`, not for output degree `s + 1`.
+    // Provenance: implementation reference and shared Nassau lower-line
+    // mathematics with sseq `MilnorSubalgebra::{top_degree, optimal_for}`.
     pub fn lower_line_bound(&self, s: usize) -> usize {
         match self.family {
             Family::A => {
@@ -1500,6 +1558,8 @@ impl fmt::Display for Subalgebra {
     }
 }
 
+// Provenance: implementation reference to sseq `SignatureIterator` ordering;
+// the explicit bit list and sorting convention are local.
 fn compatible_bit_order(profile: &[u32]) -> Vec<(usize, u32)> {
     let mut bit_order = Vec::new();
     for j in 1..=profile.len() {
@@ -1532,6 +1592,9 @@ fn fprime_bit_order(n: usize, max_degree: usize) -> Vec<(usize, u32)> {
     bit_order
 }
 
+// Provenance: implementation reference and shared mathematics with sseq
+// `MilnorSubalgebra::iter_signatures` and `SignatureIterator::{new, next}`;
+// this implementation uses recursion followed by sorting.
 fn generate_signatures(
     index: usize,
     profile: &[u32],
@@ -1540,8 +1603,6 @@ fn generate_signatures(
     entries: &mut [u32],
     signatures: &mut Vec<Milnor>,
 ) {
-    // Function-level references: sseq `MilnorSubalgebra::iter_signatures` and
-    // `SignatureIterator::next`; this implementation uses recursion and sort.
     if index == profile.len() {
         signatures.push(Milnor::new(entries.to_vec()));
         return;
@@ -1624,6 +1685,8 @@ fn generate_fprime_signatures(
     entries[index - 1] = 0;
 }
 
+// Provenance: implementation reference to sseq `SignatureIterator` and its
+// signature ordering; this key representation is local.
 fn signature_key(sig: &Milnor, bit_order: &[(usize, u32)]) -> Vec<u8> {
     bit_order
         .iter()
@@ -1634,10 +1697,14 @@ fn signature_key(sig: &Milnor, bit_order: &[(usize, u32)]) -> Vec<u8> {
         .collect()
 }
 
+// Provenance: implementation reference to the signature order documented by
+// sseq `MilnorSubalgebra::iter_signatures`; sorting is explicit here.
 fn sort_signatures(family: Family, bit_order: &[(usize, u32)], signatures: &mut [Milnor]) {
     signatures.sort_by(|a, b| compare_signature_order(family, bit_order, a, b));
 }
 
+// Provenance: implementation reference and shared signature-order mathematics
+// with sseq `SignatureIterator`; the comparator body is local.
 fn compare_signature_order(
     family: Family,
     bit_order: &[(usize, u32)],

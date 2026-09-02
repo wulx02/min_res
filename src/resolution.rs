@@ -1,5 +1,7 @@
-// Function-level upstream relationships are recorded beside the affected
-// routines below and in PROVENANCE.md.
+// Portions of this file were structurally adapted or implemented with reference
+// to SSeqCpp, SpectralSequences/sseq, and Nassau's algorithm, then modified for
+// this project. Each affected routine is labeled below; see PROVENANCE.md,
+// THIRD_PARTY_NOTICES.md, and LICENSE-APACHE.
 
 use std::cell::Cell;
 use std::cmp::Reverse;
@@ -610,9 +612,9 @@ impl FrozenResolutionView {
         &self.generators[id]
     }
 
+    // Provenance: implementation reference to sseq `FreeModule::compute_basis`
+    // and its generator/operation index mapping; storage and caching are local.
     fn build_basis(&self, s: usize) -> Vec<BasisElem> {
-        // Implementation reference: sseq `FreeModule::compute_basis` and its
-        // generator/operation index mapping. See PROVENANCE.md.
         let mut out = Vec::new();
         let Some(gens) = self.gens_by_s.get(s) else {
             return out;
@@ -691,9 +693,10 @@ impl FrozenMatrixBuilder<'_> {
         }
     }
 
+    // Provenance: implementation reference to sseq
+    // `ModuleHomomorphism::get_matrix` and
+    // `FreeModuleHomomorphism::apply_to_basis_element`; columns are local.
     fn d_matrix(&mut self, s: usize) -> Result<LinearMap, String> {
-        // Function-level references: sseq `ModuleHomomorphism::get_matrix` and
-        // `FreeModuleHomomorphism::apply_to_basis_element`.
         let domain = self.view.build_basis(s);
         let t = self.view.frozen_t;
         if s == 0 {
@@ -727,6 +730,9 @@ impl FrozenMatrixBuilder<'_> {
         })
     }
 
+    // Provenance: implementation reference to sseq
+    // `FreeModuleHomomorphism::apply_to_basis_element`; packed products and
+    // target indexing are local. See PROVENANCE.md.
     fn differential_of_basis_elem_packed(
         &mut self,
         elem: &BasisElem,
@@ -835,6 +841,8 @@ impl Resolution {
             .map(|_| ())
     }
 
+    // Provenance: local wrapper around the sequential resolution traversal
+    // referenced from sseq `Resolution::compute_through_bidegree*`.
     pub fn compute_from_cursor(
         &mut self,
         max_t: usize,
@@ -844,6 +852,9 @@ impl Resolution {
         self.compute_from_cursor_with_progress(max_t, mode, cursor, |_, _| Ok(()))
     }
 
+    // Provenance: implementation reference to sseq
+    // `Resolution::compute_through_bidegree{,_with_callback}`; the cursor,
+    // triangular traversal, and per-layer basis growth are local.
     pub fn compute_from_cursor_with_progress(
         &mut self,
         max_t: usize,
@@ -910,6 +921,8 @@ impl Resolution {
         })
     }
 
+    // Provenance: implementation reference to sseq's ordinary and Nassau
+    // resolution dispatch; local modes and fallback policies differ.
     fn compute_step(
         &mut self,
         s: usize,
@@ -1013,6 +1026,8 @@ impl Resolution {
 
     // These options mirror the public fixed-t controls and are kept explicit
     // so the hot path does not allocate or clone a configuration object.
+    // Provenance: structural adaptation of SSeqCpp `Resolve`'s fixed-t loop and
+    // implementation reference to sseq's resolution computation loops.
     #[allow(clippy::too_many_arguments)]
     fn compute_from_cursor_fixed_t_batch_with_progress(
         &mut self,
@@ -1074,6 +1089,8 @@ impl Resolution {
         })
     }
 
+    // Provenance: local verification wrapper around the fixed-t organization
+    // structurally adapted from SSeqCpp `Resolve`. See PROVENANCE.md.
     fn compute_fixed_t_batch_shadow_layer(
         &mut self,
         t: usize,
@@ -1105,6 +1122,8 @@ impl Resolution {
         Ok(added)
     }
 
+    // Provenance: structural adaptation of SSeqCpp `Resolve`'s fixed-t layer,
+    // parallel per-s work, barrier, and commit; worker machinery is local.
     fn compute_fixed_t_batch_layer(
         &mut self,
         t: usize,
@@ -1228,12 +1247,6 @@ impl Resolution {
             self.prewarm_fixed_t_choice_dims(t, &active_s, &inner);
         }
 
-        // Codex structurally adapted this fixed-t organization--parallel
-        // work across homological degrees followed by a layer barrier and
-        // commit--from SSeqCpp's Adams `Resolve` driver. The Rayon worker
-        // groups, frozen views, cache policies, load balancing, and Grid
-        // extensions build on that organization. See PROVENANCE.md,
-        // THIRD_PARTY_NOTICES.md, and LICENSE-APACHE.
         let mut completed_group_ranges = Vec::<(usize, usize)>::new();
         let (mut results, mut worker_caches) = if matches!(&inner, ComputeMode::Naive) {
             let view = frozen_view
@@ -1977,6 +1990,8 @@ impl Resolution {
 
     // Worker inputs are borrowed or moved independently; bundling them would
     // add ownership plumbing without reducing work in this hot path.
+    // Provenance: structural adaptation of the per-s work inside SSeqCpp
+    // `Resolve`; cloning, caches, and worker-group interfaces are local.
     #[allow(clippy::too_many_arguments)]
     fn compute_isolated_bidegree_group(
         &self,
@@ -2002,6 +2017,8 @@ impl Resolution {
         )
     }
 
+    // Provenance: structural adaptation of the per-s work inside SSeqCpp
+    // `Resolve`; progress reporting and persistent worker caches are local.
     #[allow(clippy::too_many_arguments)]
     fn compute_isolated_bidegree_group_with_progress<F>(
         &self,
@@ -2140,6 +2157,8 @@ impl Resolution {
         Ok(group_result)
     }
 
+    // Provenance: single-worker form of the fixed-t per-s organization
+    // structurally adapted from SSeqCpp `Resolve`; mutation strategy is local.
     fn compute_isolated_bidegree_group_in_place(
         &mut self,
         group: &[usize],
@@ -2157,6 +2176,8 @@ impl Resolution {
         )
     }
 
+    // Provenance: progress-reporting single-worker form of the fixed-t per-s
+    // organization structurally adapted from SSeqCpp `Resolve`.
     fn compute_isolated_bidegree_group_in_place_with_progress<F>(
         &mut self,
         group_index: usize,
@@ -3177,6 +3198,9 @@ impl Resolution {
             .retain(|key, _| key.t >= keep_from);
     }
 
+    // Provenance: implementation reference and shared Nassau subalgebra
+    // selection mathematics with sseq `MilnorSubalgebra::optimal_for`; local
+    // candidates, certification data, priorities, and cost estimates differ.
     fn choose_subalgebra<'a>(
         &mut self,
         s: usize,
@@ -3217,6 +3241,8 @@ impl Resolution {
         best.map(|(_, subalgebra)| subalgebra)
     }
 
+    // Provenance: local mode dispatcher around the subalgebra selection
+    // referenced from sseq `MilnorSubalgebra::optimal_for`.
     fn selected_algorithm2_subalgebra_for_mode(
         &mut self,
         s: usize,
@@ -3289,9 +3315,9 @@ impl Resolution {
         (Some(domain), Some(target), Some(boundary_domain))
     }
 
+    // Provenance: implementation reference and shared mathematics with sseq
+    // `Resolution::step_resolution`; this path computes homology directly.
     fn step_naive(&mut self, s: usize, t: usize) -> Result<usize, String> {
-        // Implementation reference: sseq `Resolution::step_resolution`; this
-        // local sphere-resolution path computes homology directly.
         let reps = self.naive_homology_representatives(s, t)?;
         let added = reps.len();
         for rep in reps {
@@ -3301,16 +3327,15 @@ impl Resolution {
         Ok(added)
     }
 
+    // Provenance: structural adaptation of sseq
+    // `Resolution::step_resolution_with_subalgebra` and implementation of
+    // Nassau's published Algorithm 2; local batching and caches differ.
     fn step_algorithm2(
         &mut self,
         s: usize,
         t: usize,
         subalgebra: &Subalgebra,
     ) -> Result<usize, String> {
-        // The overall sequence here is Nassau's Algorithm 2 and also appears in
-        // SpectralSequences/sseq's step_resolution_with_subalgebra: compute
-        // signature-zero homology, apply the full differential, and correct the
-        // error one signature at a time. See PROVENANCE.md.
         let profile_detail = std::env::var_os("EXT_PROFILE_SIGNATURE_DETAIL").is_some();
         let profile_verbose = std::env::var_os("EXT_PROFILE_MEMORY_VERBOSE").is_some();
         let total_timer = Instant::now();
@@ -3880,6 +3905,9 @@ impl Resolution {
         Ok(added)
     }
 
+    // Provenance: structural adaptation of quasi-inverse lifting in sseq
+    // `step_resolution_with_subalgebra`, using sseq `QuasiInverse::apply`;
+    // signature translation, batching, and caching are local.
     fn solve_signature_lifts(
         &mut self,
         s: usize,
@@ -3980,6 +4008,9 @@ impl Resolution {
         ))
     }
 
+    // Provenance: structural adaptation of sseq
+    // `Matrix::compute_quasi_inverse`/`QuasiInverse::apply` as used by
+    // `step_resolution_with_subalgebra`; cache policy is local.
     fn linear_solver_cached(
         &mut self,
         s: usize,
@@ -4024,6 +4055,8 @@ impl Resolution {
         Ok(solver)
     }
 
+    // Provenance: implementation reference and shared mathematics with sseq
+    // `Resolution::step_resolution`; this computes kernel modulo image locally.
     fn naive_homology_representatives(
         &mut self,
         s: usize,
@@ -4039,9 +4072,10 @@ impl Resolution {
         ))
     }
 
+    // Provenance: implementation reference to sseq
+    // `ModuleHomomorphism::get_matrix` and
+    // `FreeModuleHomomorphism::apply_to_basis_element`; columns are local.
     fn d_matrix(&mut self, s: usize, t: usize) -> Result<LinearMap, String> {
-        // Function-level references: sseq `ModuleHomomorphism::get_matrix` and
-        // `FreeModuleHomomorphism::apply_to_basis_element`.
         let domain = self.basis_cached(s, t);
         if s == 0 {
             let target_dim = usize::from(t == 0);
@@ -4077,6 +4111,9 @@ impl Resolution {
         })
     }
 
+    // Provenance: structural adaptation of sseq
+    // `MilnorSubalgebra::signature_matrix` and
+    // `ModuleHomomorphism::get_partial_matrix`; caches and packed columns differ.
     fn d_matrix_signature(
         &mut self,
         s: usize,
@@ -4084,8 +4121,6 @@ impl Resolution {
         subalgebra: &Subalgebra,
         sig_index: usize,
     ) -> Result<LinearMap, String> {
-        // Structural reference: sseq `MilnorSubalgebra::signature_matrix` and
-        // `ModuleHomomorphism::get_partial_matrix`. See PROVENANCE.md.
         let profile_detail = std::env::var_os("EXT_PROFILE_SIGNATURE_DETAIL").is_some();
         let matrix_timer = Instant::now();
         let domain_timer = Instant::now();
@@ -4237,6 +4272,8 @@ impl Resolution {
         })
     }
 
+    // Provenance: local cache wrapper around the signature-matrix construction
+    // structurally adapted from sseq `MilnorSubalgebra::signature_matrix`.
     fn d_matrix_signature_cached(
         &mut self,
         s: usize,
@@ -4253,6 +4290,9 @@ impl Resolution {
         Ok(matrix)
     }
 
+    // Provenance: structural adaptation of the `xs`/`dxs` correction work in
+    // sseq `step_resolution_with_subalgebra`; batching and full-basis lookup
+    // are local. See PROVENANCE.md.
     fn apply_full_differentials_to_vectors(
         &mut self,
         s: usize,
@@ -4587,6 +4627,9 @@ impl Resolution {
         Ok(out)
     }
 
+    // Provenance: implementation reference to sseq
+    // `FreeModuleHomomorphism::apply_to_basis_element`; packed products and
+    // target indexing are local. See PROVENANCE.md.
     fn differential_of_basis_elem_packed(
         &mut self,
         elem: &BasisElem,
@@ -4616,6 +4659,9 @@ impl Resolution {
         Ok(col)
     }
 
+    // Provenance: structural adaptation of signature restriction performed in
+    // sseq `step_resolution_with_subalgebra` and `get_partial_matrix`; routing
+    // is materialized locally.
     fn extract_signature_vector(
         &mut self,
         s: usize,
@@ -4642,9 +4688,9 @@ impl Resolution {
         self.build_basis(s, t)
     }
 
+    // Provenance: implementation reference to sseq `FreeModule::compute_basis`
+    // and its generator/operation index mapping; storage is local.
     fn build_basis(&self, s: usize, t: usize) -> Vec<BasisElem> {
-        // Implementation reference: sseq `FreeModule::compute_basis` and its
-        // generator/operation index mapping. See PROVENANCE.md.
         let mut out = Vec::new();
         let Some(gens) = self.gens_by_s.get(s) else {
             return out;
@@ -4665,6 +4711,8 @@ impl Resolution {
         out
     }
 
+    // Provenance: local cache wrapper around the free-module basis ordering
+    // referenced from sseq `FreeModule::compute_basis`.
     fn basis_cached(&mut self, s: usize, t: usize) -> Arc<Vec<BasisElem>> {
         let key = (s, t);
         if let Some(cached) = self.basis_cache.get(&key) {
@@ -4703,6 +4751,8 @@ impl Resolution {
         }
     }
 
+    // Provenance: structural adaptation of sseq
+    // `MilnorSubalgebra::signature_mask`; materialization and caching are local.
     fn basis_signature_cached(
         &mut self,
         s: usize,
@@ -4710,8 +4760,6 @@ impl Resolution {
         subalgebra: &Subalgebra,
         sig_index: usize,
     ) -> Arc<Vec<BasisElem>> {
-        // Structural reference: sseq `MilnorSubalgebra::signature_mask`. This
-        // function materializes and caches the corresponding local basis.
         let key = self.signature_basis_key(s, t, subalgebra, sig_index);
         if let Some(cached) = self.basis_signature_cache.get(&key) {
             return Arc::clone(cached);
@@ -4743,6 +4791,8 @@ impl Resolution {
         sig_basis
     }
 
+    // Provenance: structural adaptation of signature-basis restriction from
+    // sseq `MilnorSubalgebra::signature_mask`; coefficient caching is local.
     fn coeff_signature_basis_cached(
         &mut self,
         degree: usize,
@@ -4826,6 +4876,8 @@ impl Resolution {
         lookup
     }
 
+    // Provenance: structural adaptation of signature indexing used by sseq
+    // `MilnorSubalgebra::signature_matrix`; the cache representation is local.
     fn basis_signature_index_cached(
         &mut self,
         s: usize,
@@ -4844,6 +4896,8 @@ impl Resolution {
         index
     }
 
+    // Provenance: structural adaptation of the signature routing implicit in
+    // sseq `signature_matrix`/`get_partial_matrix`; this table is local.
     fn basis_signature_routing_cached(
         &mut self,
         s: usize,
@@ -4869,6 +4923,8 @@ impl Resolution {
         routing
     }
 
+    // Provenance: local optimization of the signature lifting structurally
+    // adapted from sseq `step_resolution_with_subalgebra`.
     fn signature_to_zero_translation(
         &mut self,
         s: usize,
@@ -5003,6 +5059,8 @@ impl Resolution {
             .collect()
     }
 
+    // Provenance: structural adaptation of the `xs` construction inside sseq
+    // `step_resolution_with_subalgebra`; this helper performs it explicitly.
     fn signature_vector_to_terms(
         &mut self,
         s: usize,
@@ -5021,10 +5079,10 @@ impl Resolution {
             .collect()
     }
 
+    // Provenance: implementation reference to sseq `Resolution::add_generators`,
+    // `FreeModule::add_generators`, and
+    // `FreeModuleHomomorphism::add_generators_from_rows`; storage is local.
     fn add_generator(&mut self, s: usize, t: usize, mut differential: Vec<ModuleTerm>) -> usize {
-        // Implementation references: sseq `Resolution::add_generators`,
-        // `FreeModule::add_generators`, and
-        // `FreeModuleHomomorphism::add_generators_from_rows`.
         while self.gens_by_s.len() <= s {
             self.gens_by_s.push(Vec::new());
         }

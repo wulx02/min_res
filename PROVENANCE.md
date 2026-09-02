@@ -69,7 +69,8 @@ This entry covers `multiply_packed_fast`,
 This entry covers `pack_entries`, `pack_padded_entries`,
 `pack_padded_entries_unchecked`, `packed_entry`, `packed_entry_mask`,
 `pack_xi_1` through `pack_xi_9`, `unpack_xi_1` through `unpack_xi_9`,
-`Milnor::packed`, and `Milnor::from_packed`.
+`unpack_packed_entries_trimmed`, `milnor_from_packed`, `Milnor::packed`, and
+`Milnor::from_packed`.
 
 - Upstream functions used as references:
   - SSeqCpp `MMilnor::Xi` and `MMilnor::ToXi` in
@@ -84,9 +85,11 @@ This entry covers `pack_entries`, `pack_padded_entries`,
 
 ### Milnor-basis generation
 
-This entry covers `basis_of_degree`, `basis_keys_of_degree`,
+This entry covers `basis_through_degree`, `basis_keys_through_degree`,
+`basis_of_degree`, `basis_keys_of_degree`,
 `basis_keys_of_degree_with_capacity`, `packed_basis_counts_through_degree`,
-`basis_rec`, and `basis_keys_rec`.
+`packed_basis_count_of_degree`, `basis_rec`, `basis_keys_rec`, and
+`max_milnor_index`.
 
 - Upstream functions used as references: SpectralSequences/sseq
   `MilnorAlgebra::compute_ppart` and `MilnorAlgebra::generate_basis_2` in
@@ -150,7 +153,7 @@ wrappers that call them.
   while applying the same row operations to a source combination; a zero image
   produces a relation. The storage and APIs are local.
 
-### `kernel_with_label`
+### `kernel` and `kernel_with_label`
 
 - Upstream functions used as references: SSeqCpp `SetLinearMap` and
   SpectralSequences/sseq `Matrix::compute_kernel`.
@@ -199,7 +202,11 @@ This entry covers `homology_representatives`,
 
 ## `src/subalgebra.rs`
 
-### `Subalgebra::a`, `Subalgebra::b_profile`, and `Subalgebra::from_profile`
+### Subalgebra constructors
+
+This entry covers `Subalgebra::a`, `Subalgebra::b_profile`, `Subalgebra::f`,
+`Subalgebra::fprime`, `Subalgebra::from_profile`, and
+`Subalgebra::from_signatures`.
 
 - Upstream functions used as references: SpectralSequences/sseq
   `MilnorSubalgebra::new` and `MilnorSubalgebra::zero_algebra` in
@@ -250,8 +257,9 @@ This entry covers `generate_signatures`, `compatible_bit_order`,
 ### Lower-line and subalgebra selection functions
 
 This entry covers `profile_d`, `profile_lower_ok`, `lower_line_applies`,
-`lower_line_bound`, `Resolution::choose_subalgebra`, and
-`Resolution::selected_algorithm2_subalgebra_for_mode`.
+`selection_condition_applies`, `selection_applicability`,
+`applicability_for_mode`, `lower_line_bound`, `Resolution::choose_subalgebra`,
+and `Resolution::selected_algorithm2_subalgebra_for_mode`.
 
 - Upstream functions used as references: SpectralSequences/sseq
   `MilnorSubalgebra::top_degree` and `MilnorSubalgebra::optimal_for` in
@@ -340,7 +348,8 @@ This entry covers `d_matrix_signature_cached`, `basis_signature_cached`,
 
 ### Lifting helpers used by `step_algorithm2`
 
-This entry covers `linear_solver_cached` and `solve_signature_lifts`.
+This entry covers `linear_solver_cached`, `solve_signature_lifts`, and
+`signature_to_zero_translation`.
 
 - Upstream functions used as references: SpectralSequences/sseq
   `Matrix::compute_quasi_inverse`, `QuasiInverse::apply`, and their use inside
@@ -371,7 +380,7 @@ This entry covers `apply_full_differentials_to_vectors` and
 ### Fixed-internal-degree parallel layer functions
 
 This entry covers `compute_from_cursor_fixed_t_batch_with_progress`,
-`compute_fixed_t_batch_layer`, and the
+`compute_fixed_t_batch_shadow_layer`, `compute_fixed_t_batch_layer`, and the
 `compute_isolated_bidegree_group*` family.
 
 - Upstream functions used as references:
@@ -389,7 +398,8 @@ This entry covers `compute_from_cursor_fixed_t_batch_with_progress`,
 
 ### Sequential computation loop
 
-This entry covers `compute_from_cursor_with_progress` and `compute_step`.
+This entry covers `compute_from_cursor`, `compute_from_cursor_with_progress`,
+and `compute_step`.
 
 - Upstream functions used as references: SpectralSequences/sseq
   `Resolution::compute_through_bidegree` and

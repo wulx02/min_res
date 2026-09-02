@@ -1,5 +1,7 @@
-// Function-level upstream relationships are recorded beside the affected
-// routines below and in PROVENANCE.md.
+// Portions of this file were structurally adapted or implemented with reference
+// to SSeqCpp and SpectralSequences/sseq, then modified for this project. Each
+// affected routine is labeled below; see PROVENANCE.md,
+// THIRD_PARTY_NOTICES.md, and LICENSE-APACHE.
 
 use crate::memory_probe::log_process_memory;
 
@@ -134,13 +136,15 @@ impl Iterator for Ones<'_> {
 }
 
 #[cfg(test)]
+// Provenance: test wrapper around the structurally adapted kernel construction
+// documented on `kernel_with_label` and in PROVENANCE.md.
 pub fn kernel(columns: &[BitVec], target_dim: usize) -> Vec<BitVec> {
     kernel_with_label(columns, target_dim, None)
 }
 
+// Provenance: structural adaptation of dependency tracking from SSeqCpp
+// `SetLinearMap` and sseq `Matrix::compute_kernel`. See PROVENANCE.md.
 fn kernel_with_label(columns: &[BitVec], target_dim: usize, label: Option<&str>) -> Vec<BitVec> {
-    // Function-level references: SSeqCpp `SetLinearMap` and sseq
-    // `Matrix::compute_kernel`. See PROVENANCE.md.
     let domain_dim = columns.len();
     if domain_dim == 0 {
         return Vec::new();
@@ -179,13 +183,13 @@ fn kernel_with_label(columns: &[BitVec], target_dim: usize, label: Option<&str>)
 }
 
 #[cfg(test)]
+// Provenance: structural adaptation of quotient-space construction from
+// SSeqCpp `QuotientSpace` and sseq `Subquotient::from_parts`.
 pub fn quotient_representatives(
     subspace: &[BitVec],
     mod_out_by: &[BitVec],
     ambient_dim: usize,
 ) -> Vec<BitVec> {
-    // Function-level references: SSeqCpp `QuotientSpace` and sseq
-    // `Subquotient::from_parts`. See PROVENANCE.md.
     let mut basis = XorBasis::new(ambient_dim);
     for vector in mod_out_by {
         basis.insert(vector.clone());
@@ -200,8 +204,9 @@ pub fn quotient_representatives(
     representatives
 }
 
+// Provenance: implementation reference to SSeqCpp `GetImage` and sseq
+// `Matrix::apply`; this dense-column F2 body is local.
 pub fn apply_columns(columns: &[BitVec], target_dim: usize, vector: &BitVec) -> BitVec {
-    // Function-level references: SSeqCpp `GetImage` and sseq `Matrix::apply`.
     debug_assert_eq!(columns.len(), vector.len());
     let mut out = BitVec::new(target_dim);
     for i in vector.ones() {
@@ -210,6 +215,8 @@ pub fn apply_columns(columns: &[BitVec], target_dim: usize, vector: &BitVec) -> 
     out
 }
 
+// Provenance: structural adaptation of kernel/image homology construction from
+// sseq's resolution functions and `Subquotient::from_parts`.
 pub fn homology_representatives(
     differential_columns: &[BitVec],
     differential_target_dim: usize,
@@ -225,6 +232,8 @@ pub fn homology_representatives(
     )
 }
 
+// Provenance: structural adaptation of kernel/image homology construction from
+// sseq's resolution functions and `Subquotient::from_parts`.
 pub fn homology_representatives_with_label(
     differential_columns: &[BitVec],
     differential_target_dim: usize,
@@ -272,6 +281,8 @@ impl HomologyRepresentativeBatches {
         self.cycles.is_empty()
     }
 
+    // Provenance: local batching extension of the homology construction
+    // referenced from sseq; batching itself is not an upstream translation.
     pub fn next_batch(&mut self, batch_len: usize) -> Option<Vec<BitVec>> {
         if self.next_cycle >= self.cycles.len() {
             return None;
@@ -293,6 +304,8 @@ impl HomologyRepresentativeBatches {
     }
 }
 
+// Provenance: structural adaptation of sseq `Subquotient::from_parts`,
+// `Subspace::reduce`, and `Matrix::compute_kernel`; batching is local.
 pub fn homology_representative_batches_with_label(
     differential_columns: &[BitVec],
     differential_target_dim: usize,
@@ -300,8 +313,6 @@ pub fn homology_representative_batches_with_label(
     ambient_dim: usize,
     label: Option<&str>,
 ) -> HomologyRepresentativeBatches {
-    // Function-level references: sseq `Subquotient::from_parts`,
-    // `Subspace::reduce`, and `Matrix::compute_kernel`. See PROVENANCE.md.
     if ambient_dim == 0 {
         return HomologyRepresentativeBatches {
             quotient_basis: Vec::new(),
@@ -457,8 +468,8 @@ struct ImageBasis {
 }
 
 impl LinearSolver {
-    // Structural references: SSeqCpp `GetInvMap`/`GetImage`/`GetInvImage`
-    // and sseq `Matrix::compute_quasi_inverse`/`QuasiInverse::apply`.
+    // Provenance: structural adaptation of SSeqCpp `GetInvMap` and sseq
+    // `Matrix::compute_quasi_inverse`; storage and APIs are local.
     pub fn new(columns: &[BitVec], target_dim: usize) -> Self {
         let domain_dim = columns.len();
         let mut basis = ImageBasis::new(target_dim, domain_dim);
@@ -472,6 +483,8 @@ impl LinearSolver {
         Self { basis, target_dim }
     }
 
+    // Provenance: structural adaptation of SSeqCpp `GetImage`/`GetInvImage`
+    // and sseq `QuasiInverse::apply`; the dense BitVec solver is local.
     pub fn solve(&self, target: &BitVec) -> Option<BitVec> {
         debug_assert_eq!(target.len(), self.target_dim);
         self.basis.solve(target.clone())
@@ -495,8 +508,8 @@ impl LinearSolver {
 }
 
 impl ImageBasis {
-    // Structural references: SSeqCpp `GetInvMap` and `SetLinearMap*`, and
-    // sseq's quasi-inverse and kernel construction. See PROVENANCE.md.
+    // Provenance: structural adaptation of SSeqCpp `GetInvMap`/`SetLinearMap*`
+    // and sseq's quasi-inverse construction. See PROVENANCE.md.
     fn new(target_dim: usize, domain_dim: usize) -> Self {
         Self {
             pivots: vec![None; target_dim],
@@ -504,6 +517,8 @@ impl ImageBasis {
         }
     }
 
+    // Provenance: structural adaptation of pivot reduction in SSeqCpp
+    // `GetInvMap`/`SetLinearMap*` and sseq `Matrix::row_reduce`.
     fn reduce(&self, mut image: BitVec, mut combo: BitVec) -> (BitVec, BitVec) {
         let mut start = 0;
         while let Some(pivot) = image.leading_one_from_start(&mut start) {
@@ -516,6 +531,8 @@ impl ImageBasis {
         (image, combo)
     }
 
+    // Provenance: structural adaptation of image/preimage insertion in
+    // SSeqCpp `SetLinearMap*` and sseq's quasi-inverse construction.
     fn insert(&mut self, image: BitVec, combo: BitVec) {
         let (image, combo) = self.reduce(image, combo);
         if let Some(pivot) = image.leading_one() {
@@ -523,6 +540,8 @@ impl ImageBasis {
         }
     }
 
+    // Provenance: structural adaptation of kernel-relation detection in
+    // SSeqCpp `SetLinearMap*` and sseq `Matrix::compute_kernel`.
     fn insert_or_relation(&mut self, image: BitVec, combo: BitVec) -> Option<BitVec> {
         let (image, combo) = self.reduce(image, combo);
         if let Some(pivot) = image.leading_one() {
@@ -533,6 +552,8 @@ impl ImageBasis {
         }
     }
 
+    // Provenance: structural adaptation of SSeqCpp `GetInvImage` and sseq
+    // `QuasiInverse::apply`; the representation is local.
     fn solve(&self, target: BitVec) -> Option<BitVec> {
         let combo = BitVec::new(self.domain_dim);
         let (image, combo) = self.reduce(target, combo);
@@ -560,14 +581,16 @@ impl ImageBasis {
 }
 
 impl XorBasis {
-    // Structural references: SSeqCpp `Residue`/`AddToSpace`/`GetSpace` and
-    // sseq `Subspace::reduce`/`Subspace::add_vector`. See PROVENANCE.md.
+    // Provenance: structural adaptation of SSeqCpp `GetSpace` and sseq
+    // `Subspace` construction; dense BitVec storage is local.
     fn new(ambient_dim: usize) -> Self {
         Self {
             pivots: vec![None; ambient_dim],
         }
     }
 
+    // Provenance: structural adaptation of SSeqCpp `Residue`/`ResidueInplace`
+    // and sseq `Subspace::reduce`; dense BitVec storage is local.
     fn reduce(&self, mut vector: BitVec) -> BitVec {
         let mut start = 0;
         while let Some(pivot) = vector.leading_one_from_start(&mut start) {
@@ -579,6 +602,8 @@ impl XorBasis {
         vector
     }
 
+    // Provenance: structural adaptation of SSeqCpp `AddToSpace`/`GetSpace`
+    // and sseq `Subspace::add_vector`. See PROVENANCE.md.
     fn insert(&mut self, vector: BitVec) -> Option<BitVec> {
         let reduced = self.reduce(vector);
         let pivot = reduced.leading_one()?;
