@@ -16,6 +16,20 @@ The labels used here have distinct meanings:
 - **Shared mathematical algorithm:** the functions implement the same published
   mathematics; this label alone does not claim a source-code translation.
 
+## `src/fast_hash.rs`
+
+### `FastHasher::mix`
+
+- Upstream function: Sebastiano Vigna's
+  [SplitMix64 `next`](https://prng.di.unimi.it/splitmix64.c).
+- Relationship: **direct source adaptation** for the initial SplitMix64 output
+  mixing sequence: the additive constant, two shift-and-multiply steps, and
+  final XOR-shift. The subsequent combination into `FastHasher::state` is a
+  local extension.
+- Upstream status: Vigna's 2015 source dedicates the code to the public domain
+  to the extent possible under law and otherwise grants permission to use,
+  copy, modify, and distribute it for any purpose.
+
 ## `src/milnor.rs`
 
 ### `Milnor::degree`, `weight`, and `Milnor` display

@@ -60,3 +60,14 @@ but no source code from it is copied, translated, linked, or distributed in
 this project. The GPL-2.0 license therefore does not apply to this
 distribution. See [PROVENANCE.md](PROVENANCE.md) for the distinction between
 the published mathematical algorithm and the code provenance of this project.
+
+## 4. SplitMix64 output mixer
+
+The initial output-mixing sequence in `src/fast_hash.rs` function
+`FastHasher::mix` is adapted from Sebastiano Vigna's
+[SplitMix64 implementation](https://prng.di.unimi.it/splitmix64.c). The
+subsequent combination into this project's hash state is local.
+
+The upstream source was written by Sebastiano Vigna in 2015 and dedicated to
+the public domain to the extent possible under law; it also grants permission
+to use, copy, modify, and distribute the software for any purpose.
