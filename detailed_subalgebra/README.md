@@ -24,5 +24,5 @@ for checksum in detailed_subalgebra/*.sha256; do
 done
 ```
 
-These generated data files are distributed under the same MIT License as the
-rest of the repository.
+These generated data files are distributed under the MIT License in
+[`LICENSE-MIT`](../LICENSE-MIT).

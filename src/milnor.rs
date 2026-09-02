@@ -6,8 +6,8 @@ use crate::fast_hash::{FastHashMap as HashMap, FastHashSet as HashSet};
 pub type CoeffKey = u64;
 
 // Portions of this file were translated, structurally adapted, or implemented
-// with reference to SSeqCpp, SpectralSequences/sseq, and cnassau/steenrod, then
-// modified for this project. Each affected routine is labeled below; see
+// with reference to SSeqCpp and SpectralSequences/sseq, then modified for this
+// project. Each affected routine is labeled below; see
 // PROVENANCE.md, THIRD_PARTY_NOTICES.md, and LICENSE-APACHE.
 pub const PACKED_ENTRY_LIMIT: usize = 9;
 pub const PACKED_BASIS_UNCHECKED_MAX_DEGREE: usize = 512;
@@ -1070,7 +1070,7 @@ where
 }
 
 // Provenance: implementation reference and shared Milnor-product mathematics
-// with sseq `PPartMultiplier` and cnassau/steenrod; not a direct translation.
+// with sseq `PPartMultiplier`; not a direct translation.
 fn multiply_packed_entries_with_row_cache_internal<F>(
     left_entries: &[u32],
     right_entries: &[u32],

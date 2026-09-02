@@ -55,7 +55,8 @@ License 2.0 option for material derived from SpectralSequences/sseq.
 The resolution algorithm is based on Christian Nassau's paper,
 [“Computing a minimal resolution over the Steenrod algebra”](https://arxiv.org/abs/1910.04063).
 Nassau's [cnassau/steenrod](https://github.com/cnassau/steenrod) implementation
-was also used by Codex as a reference for finite-subalgebra selection and matrix
-behavior. It is credited as a design and implementation reference rather than
-as directly adapted source. See [PROVENANCE.md](PROVENANCE.md) for the affected
-functions.
+is a related implementation licensed under GPL-2.0. It is cited for context,
+but no source code from it is copied, translated, linked, or distributed in
+this project. The GPL-2.0 license therefore does not apply to this
+distribution. See [PROVENANCE.md](PROVENANCE.md) for the distinction between
+the published mathematical algorithm and the code provenance of this project.

@@ -419,10 +419,11 @@ and `compute_step`.
 
 `Subalgebra::profile_tau`, `Subalgebra::profile_d`, the lower-line tests,
 signature decomposition, and `Resolution::step_algorithm2` implement Nassau's
-published signature-filtration method. Codex also used `cnassau/steenrod` as an
-implementation reference for profile selection, multiplication matrices,
-signature handling, and the resolution loop. This is recorded as mathematical
-and implementation-reference use, not as a direct source adaptation.
+published signature-filtration method. The GPL-2.0-licensed
+`cnassau/steenrod` project is cited as a related implementation. No source code
+from it is copied, translated, linked, or distributed here; the local code
+provenance is the paper and the SSeqCpp and SpectralSequences/sseq functions
+identified above.
 
 ## Licenses
 
