@@ -229,12 +229,16 @@ cargo build --release --locked
 
 ## Acknowledgments and third-party code
 
-The fast Milnor-basis multiplication kernel in `src/milnor.rs` is a Rust
-adaptation of Weinan Lin's `MulMilnorV3` implementation in
-[SSeqCpp](https://github.com/WayneLin92/SSeqCpp). We thank Weinan Lin for making
-this implementation publicly available. The adapted portion is used under the
-Apache License 2.0 and has been modified for this project's packed coefficient
-representation, degree range, and callback-based Rust interface. See
+The Steenrod-algebra infrastructure in this project was informed by Weinan
+Lin's [SSeqCpp](https://github.com/WayneLin92/SSeqCpp), including its compact
+Milnor-monomial representation and the fixed-internal-degree organization used
+for parallel computation. The fast Milnor-basis multiplication kernel in
+`src/milnor.rs` is a direct Rust adaptation of SSeqCpp's `MulMilnorV3`.
+
+This project uses a different packed bit layout and implements its Rayon
+schedulers, worker caches, and Grid orchestration separately. We thank Weinan
+Lin for making SSeqCpp publicly available. The SSeqCpp-derived portions are
+used under the Apache License 2.0. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
 [LICENSE-APACHE](LICENSE-APACHE) for details.
 
@@ -244,8 +248,8 @@ resolution implementation.
 
 ## License
 
-Original code in this project is licensed under the MIT License. The adapted
-SSeqCpp Milnor multiplication code is licensed under the Apache License 2.0.
+Original code in this project is licensed under the MIT License. The
+SSeqCpp-derived portions are licensed under the Apache License 2.0.
 The combined distribution is therefore identified as `MIT AND Apache-2.0`.
 See [LICENSE](LICENSE), [LICENSE-APACHE](LICENSE-APACHE), and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

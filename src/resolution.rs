@@ -1221,6 +1221,11 @@ impl Resolution {
             self.prewarm_fixed_t_choice_dims(t, &active_s, &inner);
         }
 
+        // The fixed-t organization--parallel work across homological degrees,
+        // followed by a layer barrier--was informed by SSeqCpp's Adams
+        // resolution driver. The Rayon scheduling, frozen views, cache
+        // management, and Grid extensions below are separate implementations.
+        // See THIRD_PARTY_NOTICES.md and LICENSE-APACHE.
         let mut completed_group_ranges = Vec::<(usize, usize)>::new();
         let (mut results, mut worker_caches) = if matches!(&inner, ComputeMode::Naive) {
             let view = frozen_view

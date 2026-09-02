@@ -5,6 +5,10 @@ use crate::fast_hash::{FastHashMap as HashMap, FastHashSet as HashSet};
 
 pub type CoeffKey = u64;
 
+// The compact Milnor-monomial representation and its exponent-vector
+// conversion interface were informed by Weinan Lin's MMilnor/Xi/ToXi design
+// in SSeqCpp. This implementation uses a different, contiguous-field bit
+// layout. See THIRD_PARTY_NOTICES.md and LICENSE-APACHE.
 pub const PACKED_ENTRY_LIMIT: usize = 9;
 pub const PACKED_BASIS_UNCHECKED_MAX_DEGREE: usize = 512;
 const PACKED_ENTRY_WIDTHS: [usize; PACKED_ENTRY_LIMIT] = [10, 8, 7, 6, 5, 4, 3, 2, 1];
