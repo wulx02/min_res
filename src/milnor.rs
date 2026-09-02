@@ -669,6 +669,15 @@ fn pack_xi_9(xi: &[u32; 9]) -> CoeffKey {
 }
 
 #[inline]
+// The optimized matrix-enumeration kernel from `max_mask` through the
+// `define_mul_packed_xi_v3_for_each!` instantiations below is a Rust adaptation
+// of Weinan Lin's `max_mask` and `MulMilnorV3` implementation in SSeqCpp.
+//
+// This adaptation changes the representation and interface: it operates on
+// this project's packed Milnor coefficients, supports widths 1 through 9,
+// emits terms through a callback, and uses Rust's checked indexing and
+// wrapping subtraction semantics. See THIRD_PARTY_NOTICES.md and
+// LICENSE-APACHE for attribution and license terms.
 fn max_mask(upper_bound: u32, mask: u32) -> u32 {
     let mut m = upper_bound & mask;
     let mut n = 0;

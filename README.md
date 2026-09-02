@@ -227,6 +227,25 @@ cargo test --locked
 cargo build --release --locked
 ```
 
+## Acknowledgments and third-party code
+
+The fast Milnor-basis multiplication kernel in `src/milnor.rs` is a Rust
+adaptation of Weinan Lin's `MulMilnorV3` implementation in
+[SSeqCpp](https://github.com/WayneLin92/SSeqCpp). We thank Weinan Lin for making
+this implementation publicly available. The adapted portion is used under the
+Apache License 2.0 and has been modified for this project's packed coefficient
+representation, degree range, and callback-based Rust interface. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
+[LICENSE-APACHE](LICENSE-APACHE) for details.
+
+The minimal-resolution algorithm in this repository is based on Nassau's
+signature-filtration method. It is distinct from SSeqCpp's Gröbner-basis
+resolution implementation.
+
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE).
+Original code in this project is licensed under the MIT License. The adapted
+SSeqCpp Milnor multiplication code is licensed under the Apache License 2.0.
+The combined distribution is therefore identified as `MIT AND Apache-2.0`.
+See [LICENSE](LICENSE), [LICENSE-APACHE](LICENSE-APACHE), and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
