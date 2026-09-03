@@ -52,7 +52,51 @@ This entry covers `mul_packed_xi_v3_for_each_1` through
   `multiply_packed_fast_raw`, `multiply_packed_fast_raw_for_each`,
   `multiply_packed_fast_raw_for_each_bounded_degree`, and
   `multiply_packed_fast_raw_for_each_width` provide dispatch and filtering
-  around the adapted kernel; their wrapper bodies are local.
+  around the adapted kernel. Their width selection, filtering, and callback
+  bodies are local; the conversion flow retained from SSeqCpp is recorded in
+  the next entry.
+- Runtime role: `multiply_packed_fast_bounded_matching`,
+  `multiply_packed_fast_raw_for_each_bounded_degree`, and
+  `multiply_packed_fast_raw_for_each_width` form the production bulk-product
+  path. The unbounded `multiply_packed_fast`, `multiply_packed_fast_raw`, and
+  `multiply_packed_fast_raw_for_each` wrappers are compiled only for tests.
+
+### Packed Milnor representation and packing/unpacking functions
+
+This entry covers `PACKED_ENTRY_WIDTHS`, `M0` through `M8`, `Milnor::packed`,
+`Milnor::from_packed`, `pack_entries`, `pack_padded_entries`,
+`pack_padded_entries_unchecked`, `packed_entry`, `packed_entry_mask`,
+`unpack_xi_1` through `unpack_xi_9`, `pack_xi_1` through `pack_xi_9`,
+`unpack_packed_entries_trimmed`, `milnor_from_packed`, and the conversion flow
+in `multiply_packed_fast_raw_for_each` and
+`multiply_packed_fast_raw_for_each_width`.
+
+- Upstream functions and design:
+  - SSeqCpp
+    [`MMilnor::Xi` and `MMilnor::ToXi`](https://github.com/WayneLin92/SSeqCpp/blob/7942e10aee1193bfbc42227752c55c7429f43523/include/algebras/steenrod.h),
+    together with their use around
+    [`MulMilnorV3` in `MulMilnor`](https://github.com/WayneLin92/SSeqCpp/blob/7942e10aee1193bfbc42227752c55c7429f43523/src/steenrod.cpp).
+  - SpectralSequences/sseq
+    [`MilnorHashMap::code`](https://github.com/SpectralSequences/sseq/blob/ac6f59d751307439a9ccc05ef6f08d9eea22e3dd/ext/crates/algebra/src/algebra/milnor_algebra.rs),
+    which packs position-dependent Milnor exponent fields into a `u64` lookup
+    key.
+- Relationship: **structural adaptation**. As in SSeqCpp, this project stores
+  Milnor basis elements in a `u64`, converts packed operands to exponent arrays
+  before the V3 multiplication kernel, and converts each resulting exponent
+  array back to the packed representation. This is the local
+  compression/decompression boundary. As in sseq's lookup key, the local
+  representation packs exponent coordinates into position-dependent fields.
+- Local changes: SSeqCpp decomposes each exponent into binary
+  `xi_j^(2^i)` generator-incidence bits, stores those bits in a 37-bit field,
+  and stores May weight in a separate 9-bit field. This project instead stores
+  nine exponent coordinates directly in contiguous fields of widths
+  `[10, 8, 7, 6, 5, 4, 3, 2, 1]`; it neither uses SSeqCpp's generator lookup
+  tables nor stores May weight. Unlike sseq's degree-specific lookup key, this
+  project retains the first exponent so the word can be decoded without being
+  given its degree, and it uses field widths chosen for its degree-512 bound.
+  The three formats are not binary-compatible. The local functions also add
+  checked packing, inverse decoding, trailing-zero trimming, widths 1 through
+  9, bounded-degree dispatch, and callback-based result emission.
 
 ### Generic Milnor multiplication
 
@@ -68,6 +112,12 @@ This entry covers `multiply_packed_entries_with_row_cache_internal`,
   by constrained matrices, enumerate admissible entries, reject diagonals whose
   binary summands overlap, form output exponents from diagonal sums, and cancel
   repeated terms modulo two.
+- Runtime role: this generic implementation is not the main multiplication
+  path in default large computations. The default fixed-`t` Algorithm 2 path
+  performs its bulk multiplication with the adapted V3 kernel above. The
+  generic implementation is retained mainly for the `ext multiply` command,
+  low-dimensional naive or fallback computation, optional commit-time
+  `d^2 = 0` validation, and independent cross-checking in tests.
 - Local changes: this project precomputes and caches weighted row
   decompositions, traverses them recursively instead of mutating sseq's matrix
   iterator, retains only column sums and diagonal state during traversal, uses
@@ -81,11 +131,20 @@ This entry covers `multiply_packed_entries_with_row_cache_internal`,
   [`SortMod2(MMilnor1d&)`](https://github.com/WayneLin92/SSeqCpp/blob/7942e10aee1193bfbc42227752c55c7429f43523/src/steenrod.cpp).
 - Relationship: **structural adaptation**. Both first sort sparse terms and
   then remove equal terms in pairs to reduce coefficients modulo two.
+- Runtime role: the production bounded V3 wrapper
+  `multiply_packed_fast_bounded_matching` uses this function to normalize
+  duplicate terms emitted by the V3 kernel. The generic multiplication above
+  performs its parity cancellation separately with a hash set.
 - Local changes: this project scans each complete equal run, writes back only
   odd-parity runs, truncates the vector in place, and uses its packed Milnor
   ordering rather than SSeqCpp's `MMilnor` ordering and container operations.
 
 ## `src/f2.rs`
+
+This file contains a single local dense-bit-vector linear-algebra layer, with
+separate structures for pivot reduction, image/preimage tracking, and solving.
+Where both SSeqCpp and sseq are named below, they are two upstream sources for
+the structure of this layer, not alternative runtime backends.
 
 ### `XorBasis::reduce`
 
@@ -147,6 +206,8 @@ This entry covers `multiply_packed_entries_with_row_cache_internal`,
   SpectralSequences/sseq `Subquotient::from_parts`.
 - Relationship: **structural adaptation** of reducing one subspace modulo
   another and retaining independent representatives.
+- Runtime role: this helper is compiled only for tests. Production homology
+  computation uses the functions in the following section.
 
 ### Homology representative functions
 
@@ -159,6 +220,10 @@ and `homology_representative_batches_with_label`.
   the kernel/image construction in its resolution functions.
 - Relationship: **structural adaptation** of computing
   `kernel(d) / image(d_next)`. Batching and memory instrumentation are local.
+- Runtime role: `homology_representative_batches_with_label` contains the
+  shared implementation. The other two functions are convenience wrappers
+  that collect all batches and optionally omit diagnostic labels; they are not
+  separate homology algorithms.
 
 ## `src/subalgebra.rs`
 
@@ -192,7 +257,8 @@ This entry covers `split_profile_signature_packed`,
 ### Signature enumeration and ordering
 
 This entry covers `generate_signatures`, `compatible_bit_order`,
-`signature_key`, `sort_signatures`, and `compare_signature_order`.
+`profile_signature_index_packed`, `signature_key`, `sort_signatures`, and
+`compare_signature_order`.
 
 - Upstream functions: SpectralSequences/sseq
   `MilnorSubalgebra::iter_signatures`, `SignatureIterator::new`, and
@@ -205,7 +271,8 @@ This entry covers `generate_signatures`, `compatible_bit_order`,
 - Local changes: this project recursively materializes all signatures up to an
   explicit degree bound and then sorts them, whereas sseq advances a mutable
   mixed-radix iterator. The local ordering is represented by an explicit bit
-  list and is extended to the `F` and `F'` families.
+  list and `profile_signature_index_packed` converts that list to a numeric
+  index; the ordering is also extended to the `F` and `F'` families.
 
 ## `src/resolution.rs`
 
@@ -228,6 +295,10 @@ This entry covers `Resolution::build_basis` and
   tables and index-conversion API. The frozen view also excludes generators
   from the layer currently being computed and shares immutable data through
   `Arc`.
+- Runtime role: `Resolution::build_basis` is the normal implementation. The
+  frozen-view implementation is used only by explicitly selected fixed-`t`
+  naive computation and tests; it is not used by the default
+  large-computation path.
 
 ### Differential application and matrix construction
 
@@ -253,6 +324,10 @@ This entry covers both implementations of
   built in parallel, and the frozen implementation reads an immutable layer
   snapshot. The local code also reports missing terms and signature-order
   violations explicitly.
+- Runtime role: the `Resolution` implementations serve normal computation.
+  The `FrozenMatrixBuilder` implementations serve the same opt-in fixed-`t`
+  naive path described above and tests; they are not a second default matrix
+  backend.
 
 ### `Resolution::step_algorithm2`
 
@@ -268,6 +343,10 @@ This entry covers both implementations of
 - The local body rewrites those stages around dense column vectors, batching,
   signature translation, cache reuse, memory limits, profiling, and error
   reporting. The function-level control flow remains recognizably the same.
+- Runtime role: this is the usual per-bidegree mathematical algorithm selected
+  inside the default fixed-`t` auto mode whenever an eligible subalgebra is
+  available. Fixed-`t` is the outer scheduler, not an alternative to Algorithm
+  2; low-dimensional bidegrees may instead use the naive fallback.
 
 ### Signature-restricted helpers used by `step_algorithm2`
 
@@ -317,6 +396,10 @@ This entry covers `compute_from_cursor_fixed_t_batch_with_progress`,
   parallel per-`s` work, layer barrier, and post-barrier commit. The Rayon
   worker groups, persistent caches, load-balancing heuristics, memory controls,
   and Grid orchestration are local extensions.
+- Runtime role: the ordinary fixed-`t` branch (`shadow = false`) implements the
+  default computation mode. `compute_fixed_t_batch_shadow_layer` is an
+  explicitly requested diagnostic that compares a batch layer with a
+  sequential one.
 
 ### Sequential computation loop
 
@@ -332,6 +415,10 @@ This entry covers `compute_from_cursor_with_progress`.
   enforces its triangular task bound, and dispatches its own computation modes
   and fallback policies. The callback receives project-specific progress and
   checkpoint state.
+- Runtime role: this is the common compute entry point. In the default
+  fixed-`t` mode it delegates immediately to the fixed-`t` implementation
+  above; its own sequential loop runs for explicitly selected non-batch modes
+  and as a reference inside shadow diagnostics.
 
 ## Published Nassau algorithm
 

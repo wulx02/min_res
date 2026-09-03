@@ -231,22 +231,22 @@ cargo build --release --locked
 
 This project was implemented by OpenAI Codex at the direction of the repository
 owner. During development, Codex directly translated or structurally adapted
-upstream code and designs. The relevant sources, together with the published
-mathematical method implemented here, are:
+code and designs from:
 
-1. [SSeqCpp](https://github.com/WayneLin92/SSeqCpp), by Weinan Lin. The fast
-   Milnor multiplication kernel is a direct Rust adaptation of SSeqCpp's
-   `MulMilnorV3`; additional structural adaptations are documented in
-   `PROVENANCE.md`.
+1. [SSeqCpp](https://github.com/WayneLin92/SSeqCpp), by Weinan Lin.
 2. The `ext` implementation in
-   [SpectralSequences/sseq](https://github.com/SpectralSequences/sseq), which
-   Codex structurally adapted for the specific functions listed in
-   `PROVENANCE.md`.
-3. Christian Nassau's
-   [signature-filtration algorithm](https://arxiv.org/abs/1910.04063).
+   [SpectralSequences/sseq](https://github.com/SpectralSequences/sseq), whose
+   package metadata names Hood Chatham, Dexter Chua, and Joey
+   Beauvais-Feisthauer.
+3. Sebastiano Vigna's public-domain
+   [SplitMix64 output mixer](https://prng.di.unimi.it/splitmix64.c).
 
-See [PROVENANCE.md](PROVENANCE.md) for the function-by-function account and
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for licenses and attribution.
+The resolution method is based on Christian Nassau's
+[signature-filtration algorithm](https://arxiv.org/abs/1910.04063).
+
+See [PROVENANCE.md](PROVENANCE.md) for the exact function mappings and local
+changes, and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for licenses and
+attribution.
 
 ## License
 

@@ -12,6 +12,9 @@ pub type CoeffKey = u64;
 
 pub const PACKED_ENTRY_LIMIT: usize = 9;
 pub const PACKED_BASIS_UNCHECKED_MAX_DEGREE: usize = 512;
+// Provenance: structural adaptation of the position-dependent exponent fields
+// in sseq `MilnorHashMap::code`. These widths and masks are local and retain
+// the first exponent, unlike sseq's degree-specific lookup key.
 const PACKED_ENTRY_WIDTHS: [usize; PACKED_ENTRY_LIMIT] = [10, 8, 7, 6, 5, 4, 3, 2, 1];
 const M0: CoeffKey = (1_u64 << 10) - 1;
 const M1: CoeffKey = (1_u64 << 8) - 1;
@@ -104,10 +107,17 @@ impl Milnor {
             .sum()
     }
 
+    // Provenance: structural adaptation of the packed/exponent conversion
+    // boundary provided by SSeqCpp `MMilnor::Xi`/`MMilnor::ToXi` and the
+    // position-dependent field design in sseq `MilnorHashMap::code`
+    // (Apache-2.0). The fixed-width field layout used here is local.
     pub fn packed(&self) -> Option<CoeffKey> {
         pack_entries(&self.entries)
     }
 
+    // Provenance: structural adaptation of the inverse conversion role of
+    // SSeqCpp `MMilnor::ToXi` (Apache-2.0); contiguous-field extraction and
+    // dynamic trailing-zero trimming are local.
     pub fn from_packed(packed: CoeffKey) -> Self {
         milnor_from_packed(packed)
     }
@@ -152,6 +162,10 @@ pub fn tau_a(n: usize) -> usize {
         .sum()
 }
 
+// Provenance: these packing routines structurally adapt the role of SSeqCpp
+// `MMilnor::Xi` and the fixed-field `MilnorHashMap::code` design in sseq
+// (Apache-2.0). This project keeps the first exponent, uses its own field
+// widths, and is not binary-compatible with either upstream representation.
 pub fn pack_entries(entries: &[u32]) -> Option<CoeffKey> {
     if entries.len() > PACKED_ENTRY_LIMIT {
         return None;
@@ -163,6 +177,8 @@ pub fn pack_entries(entries: &[u32]) -> Option<CoeffKey> {
     pack_padded_entries(&padded)
 }
 
+// Provenance: part of the structurally adapted packed Milnor conversion
+// family described above; bounds checking for the local fields is local.
 pub(crate) fn pack_padded_entries(entries: &[u32; PACKED_ENTRY_LIMIT]) -> Option<CoeffKey> {
     for (i, &entry) in entries.iter().enumerate() {
         if entry as CoeffKey > packed_entry_mask(i) {
@@ -173,6 +189,8 @@ pub(crate) fn pack_padded_entries(entries: &[u32; PACKED_ENTRY_LIMIT]) -> Option
 }
 
 #[inline]
+// Provenance: structural adaptation of the packing role of SSeqCpp
+// `MMilnor::Xi` and sseq `MilnorHashMap::code`; this unrolled layout is local.
 pub(crate) fn pack_padded_entries_unchecked(entries: &[u32; PACKED_ENTRY_LIMIT]) -> CoeffKey {
     (entries[0] as CoeffKey)
         | ((entries[1] as CoeffKey) << 10)
@@ -186,6 +204,8 @@ pub(crate) fn pack_padded_entries_unchecked(entries: &[u32; PACKED_ENTRY_LIMIT])
 }
 
 #[inline]
+// Provenance: structural adaptation of the unpacking role of SSeqCpp
+// `MMilnor::ToXi`; direct fixed-field extraction is local.
 pub fn packed_entry(packed: CoeffKey, index: usize) -> u32 {
     match index {
         0 => (packed & M0) as u32,
@@ -202,6 +222,8 @@ pub fn packed_entry(packed: CoeffKey, index: usize) -> u32 {
 }
 
 #[inline]
+// Provenance: local bounds helper for the structurally adapted packed-field
+// representation described above.
 fn packed_entry_mask(index: usize) -> CoeffKey {
     (1_u64 << PACKED_ENTRY_WIDTHS[index]) - 1
 }
@@ -407,6 +429,9 @@ pub fn multiply_packed_fast_raw(left: CoeffKey, right: CoeffKey) -> Vec<CoeffKey
 }
 
 #[cfg(test)]
+// Provenance: structural adaptation of SSeqCpp `MulMilnor`'s conversion flow:
+// decode packed inputs, call the adapted `MulMilnorV3` kernel, and encode each
+// result. Width dispatch, callbacks, and the packed representation are local.
 pub fn multiply_packed_fast_raw_for_each(
     left: CoeffKey,
     right: CoeffKey,
@@ -450,6 +475,9 @@ pub fn multiply_packed_fast_raw_for_each_bounded_degree(
     multiply_packed_fast_raw_for_each_width(left, right, width, emit);
 }
 
+// Provenance: structural adaptation of SSeqCpp `MulMilnor`'s conversion flow.
+// This local version selects widths 1 through 9 before invoking the adapted
+// kernel and uses fixed-field pack/unpack helpers instead of `Xi`/`ToXi`.
 pub fn multiply_packed_fast_raw_for_each_width(
     left: CoeffKey,
     right: CoeffKey,
@@ -540,22 +568,32 @@ fn sort_packed_mod2(terms: &mut Vec<CoeffKey>) {
     terms.truncate(write);
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::ToXi`'s conversion
+// role; extraction from the local direct-exponent fields is local.
 fn unpack_xi_1(packed: CoeffKey) -> [u32; 1] {
     [(packed & M0) as u32]
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::Xi`'s conversion
+// role; this project uses its own direct-exponent field encoding.
 fn pack_xi_1(xi: &[u32; 1]) -> CoeffKey {
     xi[0] as CoeffKey
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::ToXi`'s conversion
+// role; extraction from the local direct-exponent fields is local.
 fn unpack_xi_2(packed: CoeffKey) -> [u32; 2] {
     [(packed & M0) as u32, ((packed >> 10) & M1) as u32]
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::Xi`'s conversion
+// role; this project uses its own direct-exponent field encoding.
 fn pack_xi_2(xi: &[u32; 2]) -> CoeffKey {
     (xi[0] as CoeffKey) | ((xi[1] as CoeffKey) << 10)
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::ToXi`'s conversion
+// role; extraction from the local direct-exponent fields is local.
 fn unpack_xi_3(packed: CoeffKey) -> [u32; 3] {
     [
         (packed & M0) as u32,
@@ -564,10 +602,14 @@ fn unpack_xi_3(packed: CoeffKey) -> [u32; 3] {
     ]
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::Xi`'s conversion
+// role; this project uses its own direct-exponent field encoding.
 fn pack_xi_3(xi: &[u32; 3]) -> CoeffKey {
     (xi[0] as CoeffKey) | ((xi[1] as CoeffKey) << 10) | ((xi[2] as CoeffKey) << 18)
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::ToXi`'s conversion
+// role; extraction from the local direct-exponent fields is local.
 fn unpack_xi_4(packed: CoeffKey) -> [u32; 4] {
     [
         (packed & M0) as u32,
@@ -577,6 +619,8 @@ fn unpack_xi_4(packed: CoeffKey) -> [u32; 4] {
     ]
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::Xi`'s conversion
+// role; this project uses its own direct-exponent field encoding.
 fn pack_xi_4(xi: &[u32; 4]) -> CoeffKey {
     (xi[0] as CoeffKey)
         | ((xi[1] as CoeffKey) << 10)
@@ -584,6 +628,8 @@ fn pack_xi_4(xi: &[u32; 4]) -> CoeffKey {
         | ((xi[3] as CoeffKey) << 25)
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::ToXi`'s conversion
+// role; extraction from the local direct-exponent fields is local.
 fn unpack_xi_5(packed: CoeffKey) -> [u32; 5] {
     [
         (packed & M0) as u32,
@@ -594,6 +640,8 @@ fn unpack_xi_5(packed: CoeffKey) -> [u32; 5] {
     ]
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::Xi`'s conversion
+// role; this project uses its own direct-exponent field encoding.
 fn pack_xi_5(xi: &[u32; 5]) -> CoeffKey {
     (xi[0] as CoeffKey)
         | ((xi[1] as CoeffKey) << 10)
@@ -602,6 +650,8 @@ fn pack_xi_5(xi: &[u32; 5]) -> CoeffKey {
         | ((xi[4] as CoeffKey) << 31)
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::ToXi`'s conversion
+// role; extraction from the local direct-exponent fields is local.
 fn unpack_xi_6(packed: CoeffKey) -> [u32; 6] {
     [
         (packed & M0) as u32,
@@ -613,6 +663,8 @@ fn unpack_xi_6(packed: CoeffKey) -> [u32; 6] {
     ]
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::Xi`'s conversion
+// role; this project uses its own direct-exponent field encoding.
 fn pack_xi_6(xi: &[u32; 6]) -> CoeffKey {
     (xi[0] as CoeffKey)
         | ((xi[1] as CoeffKey) << 10)
@@ -622,6 +674,8 @@ fn pack_xi_6(xi: &[u32; 6]) -> CoeffKey {
         | ((xi[5] as CoeffKey) << 36)
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::ToXi`'s conversion
+// role; extraction from the local direct-exponent fields is local.
 fn unpack_xi_7(packed: CoeffKey) -> [u32; 7] {
     [
         (packed & M0) as u32,
@@ -634,6 +688,8 @@ fn unpack_xi_7(packed: CoeffKey) -> [u32; 7] {
     ]
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::Xi`'s conversion
+// role; this project uses its own direct-exponent field encoding.
 fn pack_xi_7(xi: &[u32; 7]) -> CoeffKey {
     (xi[0] as CoeffKey)
         | ((xi[1] as CoeffKey) << 10)
@@ -644,6 +700,8 @@ fn pack_xi_7(xi: &[u32; 7]) -> CoeffKey {
         | ((xi[6] as CoeffKey) << 40)
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::ToXi`'s conversion
+// role; extraction from the local direct-exponent fields is local.
 fn unpack_xi_8(packed: CoeffKey) -> [u32; 8] {
     let mut xi = [0_u32; 8];
     for (i, entry) in xi.iter_mut().enumerate() {
@@ -652,6 +710,8 @@ fn unpack_xi_8(packed: CoeffKey) -> [u32; 8] {
     xi
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::Xi`'s conversion
+// role; this project uses its own direct-exponent field encoding.
 fn pack_xi_8(xi: &[u32; 8]) -> CoeffKey {
     (xi[0] as CoeffKey)
         | ((xi[1] as CoeffKey) << 10)
@@ -663,6 +723,8 @@ fn pack_xi_8(xi: &[u32; 8]) -> CoeffKey {
         | ((xi[7] as CoeffKey) << 43)
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::ToXi`'s conversion
+// role; extraction from the local direct-exponent fields is local.
 fn unpack_xi_9(packed: CoeffKey) -> [u32; 9] {
     let mut xi = [0_u32; 9];
     for (i, entry) in xi.iter_mut().enumerate() {
@@ -671,6 +733,8 @@ fn unpack_xi_9(packed: CoeffKey) -> [u32; 9] {
     xi
 }
 
+// Provenance: structural adaptation of SSeqCpp `MMilnor::Xi`'s conversion
+// role; checked delegation uses this project's direct-exponent field encoding.
 fn pack_xi_9(xi: &[u32; 9]) -> CoeffKey {
     debug_assert!(pack_padded_entries(xi).is_some());
     pack_padded_entries_unchecked(xi)
@@ -1151,6 +1215,8 @@ fn max_column_index_entries(left_entries: &[u32], right_entries: &[u32]) -> usiz
     from_right.max(from_left)
 }
 
+// Provenance: structural adaptation of the unpacking role of SSeqCpp
+// `MMilnor::ToXi`; fixed-field extraction and trailing-zero trimming are local.
 fn unpack_packed_entries_trimmed(packed: CoeffKey) -> ([u32; PACKED_ENTRY_LIMIT], usize) {
     let mut entries = [0_u32; PACKED_ENTRY_LIMIT];
     let mut len = 0;
@@ -1241,6 +1307,8 @@ fn leaf_term_packed(
     Some(pack_padded_entries_unchecked(&entries))
 }
 
+// Provenance: structural adaptation of the unpacking role of SSeqCpp
+// `MMilnor::ToXi`; this local function extracts contiguous exponent fields.
 fn milnor_from_packed(packed: CoeffKey) -> Milnor {
     let mut len = PACKED_ENTRY_LIMIT;
     while len > 0 && packed_entry(packed, len - 1) == 0 {

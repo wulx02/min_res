@@ -19,10 +19,13 @@ The directly adapted code is in `src/milnor.rs`: `max_mask` and the
 `MulMilnorV3`. They were translated to Rust and modified for this project's
 representation and interfaces.
 
-Codex also structurally adapted SSeqCpp functions for sparse `F_2`
-normalization, linear algebra, and fixed-internal-degree computation. The exact
-relationships are recorded function by function in
-[PROVENANCE.md](PROVENANCE.md) and in comments near the affected source.
+Codex also structurally adapted SSeqCpp's packed Milnor conversion pattern: the
+`MMilnor::Xi`/`MMilnor::ToXi` packing/unpacking
+(compression/decompression) boundary around the multiplication kernel. Other
+structural adaptations cover sparse `F_2` normalization, linear algebra, and
+fixed-internal-degree computation. The exact relationships and the locally
+different packed representation are recorded in [PROVENANCE.md](PROVENANCE.md)
+and in comments near the affected source.
 
 SSeqCpp's upstream license contains the following notice:
 
@@ -34,7 +37,8 @@ Apache License 2.0.
 ## 2. SpectralSequences/sseq
 
 Codex structurally adapted code and designs from the `ext` implementation in
-the SpectralSequences/sseq repository.
+the SpectralSequences/sseq repository, including its position-dependent packed
+Milnor lookup-key design.
 
 - Project: [SpectralSequences/sseq](https://github.com/SpectralSequences/sseq),
   especially its [`ext`](https://github.com/SpectralSequences/sseq/tree/ac6f59d751307439a9ccc05ef6f08d9eea22e3dd/ext)

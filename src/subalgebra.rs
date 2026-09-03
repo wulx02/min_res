@@ -849,6 +849,8 @@ impl Subalgebra {
             .unwrap_or_else(|| panic!("missing packed signature {sig} for {}", self.name()))
     }
 
+    // Provenance: structural adaptation of the mixed-radix order in sseq
+    // `SignatureIterator`; this project materializes that order as a bit index.
     fn profile_signature_index_packed(&self, x: CoeffKey) -> usize {
         let mut index = 0_usize;
         for &(j, bit) in &self.bit_order {
