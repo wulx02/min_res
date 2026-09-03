@@ -1,6 +1,6 @@
-// Portions of this file were structurally adapted or implemented with reference
-// to SSeqCpp and SpectralSequences/sseq, then modified for this project. Each
-// affected routine is labeled below; see PROVENANCE.md,
+// Portions of this file were structurally adapted from SSeqCpp and
+// SpectralSequences/sseq, then modified for this project. Each affected routine
+// is labeled below; see PROVENANCE.md,
 // THIRD_PARTY_NOTICES.md, and LICENSE-APACHE.
 
 use crate::memory_probe::log_process_memory;
@@ -202,8 +202,6 @@ pub fn quotient_representatives(
     representatives
 }
 
-// Provenance: implementation reference to SSeqCpp `GetImage` and sseq
-// `Matrix::apply`; this dense-column F2 body is local.
 pub fn apply_columns(columns: &[BitVec], target_dim: usize, vector: &BitVec) -> BitVec {
     debug_assert_eq!(columns.len(), vector.len());
     let mut out = BitVec::new(target_dim);
@@ -594,9 +592,8 @@ impl XorBasis {
         vector
     }
 
-    // Provenance: structural adaptation of SSeqCpp `AddToSpace`/`GetSpace`
-    // and implementation reference to sseq `Subspace::add_vector`; unlike
-    // sseq, this incrementally installs one reduced pivot. See PROVENANCE.md.
+    // Provenance: structural adaptation of SSeqCpp `AddToSpace`/`GetSpace`;
+    // this version incrementally installs one reduced dense pivot.
     fn insert(&mut self, vector: BitVec) -> Option<BitVec> {
         let reduced = self.reduce(vector);
         let pivot = reduced.leading_one()?;

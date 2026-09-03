@@ -14,9 +14,9 @@ pub struct FastHasher {
 }
 
 impl FastHasher {
-    // Provenance: the initial mixing sequence is adapted from Sebastiano
-    // Vigna's public-domain SplitMix64 output mixer. The state combination
-    // after `x ^= x >> 31` is specific to this hasher.
+    // Provenance: direct source adaptation of Sebastiano Vigna's public-domain
+    // SplitMix64 output mixer. The state combination after `x ^= x >> 31` is
+    // specific to this hasher.
     // https://prng.di.unimi.it/splitmix64.c
     fn mix(&mut self, value: u64) {
         let mut x = value.wrapping_add(0x9e37_79b9_7f4a_7c15);

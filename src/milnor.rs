@@ -1,6 +1,6 @@
-// Portions of this file were translated, structurally adapted, or implemented
-// with reference to SSeqCpp and SpectralSequences/sseq, then modified for this
-// project. Each affected routine is labeled below; see
+// Portions of this file were directly translated or structurally adapted from
+// SSeqCpp and SpectralSequences/sseq, then modified for this project. Each
+// affected routine is labeled below; see
 // PROVENANCE.md, THIRD_PARTY_NOTICES.md, and LICENSE-APACHE.
 
 use std::cmp::Ordering;
@@ -96,8 +96,6 @@ impl Milnor {
         &self.entries
     }
 
-    // Provenance: implementation reference to SSeqCpp `MMilnor::deg` and
-    // sseq's `xi_degrees`; this is the standard Milnor-basis degree formula.
     pub fn degree(&self) -> usize {
         self.entries
             .iter()
@@ -106,14 +104,10 @@ impl Milnor {
             .sum()
     }
 
-    // Provenance: implementation reference to SSeqCpp `MMilnor::Xi`/`ToXi`
-    // and sseq `MilnorHashMap::code`. This project uses a different bit layout.
     pub fn packed(&self) -> Option<CoeffKey> {
         pack_entries(&self.entries)
     }
 
-    // Provenance: implementation reference to SSeqCpp `MMilnor::Xi`/`ToXi`
-    // and sseq `MilnorHashMap::code`. See PROVENANCE.md.
     pub fn from_packed(packed: CoeffKey) -> Self {
         milnor_from_packed(packed)
     }
@@ -134,8 +128,6 @@ impl PartialOrd for Milnor {
 }
 
 impl fmt::Display for Milnor {
-    // Provenance: implementation reference to SSeqCpp `MMilnor::Str`; the
-    // cited sseq revision uses `P(...)`, not this `Sq(...)` format.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.entries.is_empty() {
             return write!(f, "1");
@@ -150,8 +142,6 @@ impl fmt::Display for Milnor {
     }
 }
 
-// Provenance: shared Milnor-basis mathematics also used by SSeqCpp and sseq;
-// this formula is not a source-code translation. See PROVENANCE.md.
 pub fn weight(index: usize) -> usize {
     (1usize << index) - 1
 }
@@ -162,8 +152,6 @@ pub fn tau_a(n: usize) -> usize {
         .sum()
 }
 
-// Provenance: implementation reference to SSeqCpp `MMilnor::Xi`/`ToXi` and
-// sseq `MilnorHashMap::code`. This project uses a different bit layout.
 pub fn pack_entries(entries: &[u32]) -> Option<CoeffKey> {
     if entries.len() > PACKED_ENTRY_LIMIT {
         return None;
@@ -175,8 +163,6 @@ pub fn pack_entries(entries: &[u32]) -> Option<CoeffKey> {
     pack_padded_entries(&padded)
 }
 
-// Provenance: implementation reference to SSeqCpp `MMilnor::Xi`/`ToXi` and
-// sseq `MilnorHashMap::code`; the local field widths are different.
 pub(crate) fn pack_padded_entries(entries: &[u32; PACKED_ENTRY_LIMIT]) -> Option<CoeffKey> {
     for (i, &entry) in entries.iter().enumerate() {
         if entry as CoeffKey > packed_entry_mask(i) {
@@ -187,8 +173,6 @@ pub(crate) fn pack_padded_entries(entries: &[u32; PACKED_ENTRY_LIMIT]) -> Option
 }
 
 #[inline]
-// Provenance: same packing references as `pack_padded_entries`; this is the
-// unchecked local-layout encoder. See PROVENANCE.md.
 pub(crate) fn pack_padded_entries_unchecked(entries: &[u32; PACKED_ENTRY_LIMIT]) -> CoeffKey {
     (entries[0] as CoeffKey)
         | ((entries[1] as CoeffKey) << 10)
@@ -202,8 +186,6 @@ pub(crate) fn pack_padded_entries_unchecked(entries: &[u32; PACKED_ENTRY_LIMIT])
 }
 
 #[inline]
-// Provenance: implementation reference to SSeqCpp `MMilnor` conversion and
-// sseq `MilnorHashMap::code`; direct field access and bit positions are local.
 pub fn packed_entry(packed: CoeffKey, index: usize) -> u32 {
     match index {
         0 => (packed & M0) as u32,
@@ -220,22 +202,16 @@ pub fn packed_entry(packed: CoeffKey, index: usize) -> u32 {
 }
 
 #[inline]
-// Provenance: local-layout helper for the packed representations referenced
-// from SSeqCpp `MMilnor` and sseq `MilnorHashMap::code`. See PROVENANCE.md.
 fn packed_entry_mask(index: usize) -> CoeffKey {
     (1_u64 << PACKED_ENTRY_WIDTHS[index]) - 1
 }
 
 #[cfg(test)]
-// Provenance: test wrapper around the Milnor-basis enumeration referenced
-// against sseq `MilnorAlgebra::{compute_ppart, generate_basis_2}`.
 pub fn basis_through_degree(max_degree: usize) -> Vec<Vec<Milnor>> {
     (0..=max_degree).map(basis_of_degree).collect()
 }
 
 #[cfg(test)]
-// Provenance: packed test wrapper around the Milnor-basis enumeration
-// referenced against sseq `MilnorAlgebra::{compute_ppart, generate_basis_2}`.
 pub fn basis_keys_through_degree(max_degree: usize) -> Vec<Vec<CoeffKey>> {
     let counts = packed_basis_counts_through_degree(max_degree);
     (0..=max_degree)
@@ -243,8 +219,6 @@ pub fn basis_keys_through_degree(max_degree: usize) -> Vec<Vec<CoeffKey>> {
         .collect()
 }
 
-// Provenance: implementation reference and shared mathematics with sseq
-// `MilnorAlgebra::{compute_ppart, generate_basis_2}`; this recursion is local.
 pub fn basis_of_degree(degree: usize) -> Vec<Milnor> {
     if degree == 0 {
         return vec![Milnor::one()];
@@ -257,14 +231,10 @@ pub fn basis_of_degree(degree: usize) -> Vec<Milnor> {
     out
 }
 
-// Provenance: implementation reference and shared mathematics with sseq
-// `MilnorAlgebra::{compute_ppart, generate_basis_2}`; this body is local.
 pub fn basis_keys_of_degree(degree: usize) -> Vec<CoeffKey> {
     basis_keys_of_degree_with_capacity(degree, packed_basis_count_of_degree(degree))
 }
 
-// Provenance: implementation reference and shared mathematics with sseq
-// `MilnorAlgebra::{compute_ppart, generate_basis_2}`. See PROVENANCE.md.
 fn basis_keys_of_degree_with_capacity(degree: usize, capacity: usize) -> Vec<CoeffKey> {
     if degree == 0 {
         return vec![0];
@@ -282,8 +252,6 @@ fn basis_keys_of_degree_with_capacity(degree: usize, capacity: usize) -> Vec<Coe
     out
 }
 
-// Provenance: implementation reference to sseq's degree-indexed Milnor-basis
-// construction; this dynamic-programming count is a local implementation.
 fn packed_basis_counts_through_degree(max_degree: usize) -> Vec<usize> {
     let max_index = max_milnor_index(max_degree);
     assert!(
@@ -303,14 +271,10 @@ fn packed_basis_counts_through_degree(max_degree: usize) -> Vec<usize> {
     counts
 }
 
-// Provenance: local count wrapper around the Milnor-basis enumeration
-// referenced against sseq `MilnorAlgebra::{compute_ppart, generate_basis_2}`.
 fn packed_basis_count_of_degree(degree: usize) -> usize {
     packed_basis_counts_through_degree(degree)[degree]
 }
 
-// Provenance: shared weighted-partition enumeration with sseq
-// `MilnorAlgebra::{compute_ppart, generate_basis_2}`; not a body translation.
 fn basis_rec(
     index: usize,
     max_index: usize,
@@ -332,8 +296,6 @@ fn basis_rec(
     current[index - 1] = 0;
 }
 
-// Provenance: shared weighted-partition enumeration with sseq
-// `MilnorAlgebra::{compute_ppart, generate_basis_2}`; packed output is local.
 fn basis_keys_rec(
     index: usize,
     max_index: usize,
@@ -373,8 +335,6 @@ fn basis_keys_rec(
     current[index - 1] = 0;
 }
 
-// Provenance: shared Milnor-basis degree mathematics also used by sseq's basis
-// generation; this helper is not an upstream body translation.
 fn max_milnor_index(degree: usize) -> usize {
     let mut index = 0;
     while weight(index + 1) <= degree {
@@ -408,16 +368,12 @@ pub fn multiply_packed_with_row_cache(
 }
 
 #[cfg(test)]
-// Provenance: local normalization wrapper around the SSeqCpp-derived
-// `MulMilnorV3` kernel. See PROVENANCE.md.
 pub fn multiply_packed_fast(left: CoeffKey, right: CoeffKey) -> Vec<CoeffKey> {
     let mut out = multiply_packed_fast_raw(left, right);
     sort_packed_mod2(&mut out);
     out
 }
 
-// Provenance: local bounded/filtering wrapper around the SSeqCpp-derived
-// `MulMilnorV3` kernel. See PROVENANCE.md.
 pub fn multiply_packed_fast_bounded_matching<F>(
     left: CoeffKey,
     right: CoeffKey,
@@ -438,8 +394,6 @@ where
 }
 
 #[cfg(test)]
-// Provenance: local collection wrapper around the SSeqCpp-derived
-// `MulMilnorV3` kernel. See PROVENANCE.md.
 pub fn multiply_packed_fast_raw(left: CoeffKey, right: CoeffKey) -> Vec<CoeffKey> {
     if left == 0 {
         return vec![right];
@@ -453,8 +407,6 @@ pub fn multiply_packed_fast_raw(left: CoeffKey, right: CoeffKey) -> Vec<CoeffKey
 }
 
 #[cfg(test)]
-// Provenance: local dispatch wrapper around the SSeqCpp-derived
-// `MulMilnorV3` kernel. See PROVENANCE.md.
 pub fn multiply_packed_fast_raw_for_each(
     left: CoeffKey,
     right: CoeffKey,
@@ -479,8 +431,6 @@ pub fn multiply_packed_fast_raw_for_each(
     }
 }
 
-// Provenance: local degree-bounded dispatcher for the SSeqCpp-derived
-// `MulMilnorV3` kernel. See PROVENANCE.md.
 pub fn multiply_packed_fast_raw_for_each_bounded_degree(
     left: CoeffKey,
     right: CoeffKey,
@@ -500,8 +450,6 @@ pub fn multiply_packed_fast_raw_for_each_bounded_degree(
     multiply_packed_fast_raw_for_each_width(left, right, width, emit);
 }
 
-// Provenance: local width dispatcher for the SSeqCpp-derived `MulMilnorV3`
-// kernel. The width-specific functions are generated by the adapted macro.
 pub fn multiply_packed_fast_raw_for_each_width(
     left: CoeffKey,
     right: CoeffKey,
@@ -592,30 +540,22 @@ fn sort_packed_mod2(terms: &mut Vec<CoeffKey>) {
     terms.truncate(write);
 }
 
-// Provenance: packing implementation reference to SSeqCpp `MMilnor::Xi`/`ToXi`
-// and sseq `MilnorHashMap::code`; this uses the local layout. See PROVENANCE.md.
 fn unpack_xi_1(packed: CoeffKey) -> [u32; 1] {
     [(packed & M0) as u32]
 }
 
-// Provenance: same packing reference as `unpack_xi_1`; local bit layout.
 fn pack_xi_1(xi: &[u32; 1]) -> CoeffKey {
     xi[0] as CoeffKey
 }
 
-// Provenance: packing implementation reference to SSeqCpp `MMilnor::Xi`/`ToXi`
-// and sseq `MilnorHashMap::code`; this uses the local layout. See PROVENANCE.md.
 fn unpack_xi_2(packed: CoeffKey) -> [u32; 2] {
     [(packed & M0) as u32, ((packed >> 10) & M1) as u32]
 }
 
-// Provenance: same packing reference as `unpack_xi_2`; local bit layout.
 fn pack_xi_2(xi: &[u32; 2]) -> CoeffKey {
     (xi[0] as CoeffKey) | ((xi[1] as CoeffKey) << 10)
 }
 
-// Provenance: packing implementation reference to SSeqCpp `MMilnor::Xi`/`ToXi`
-// and sseq `MilnorHashMap::code`; this uses the local layout. See PROVENANCE.md.
 fn unpack_xi_3(packed: CoeffKey) -> [u32; 3] {
     [
         (packed & M0) as u32,
@@ -624,13 +564,10 @@ fn unpack_xi_3(packed: CoeffKey) -> [u32; 3] {
     ]
 }
 
-// Provenance: same packing reference as `unpack_xi_3`; local bit layout.
 fn pack_xi_3(xi: &[u32; 3]) -> CoeffKey {
     (xi[0] as CoeffKey) | ((xi[1] as CoeffKey) << 10) | ((xi[2] as CoeffKey) << 18)
 }
 
-// Provenance: packing implementation reference to SSeqCpp `MMilnor::Xi`/`ToXi`
-// and sseq `MilnorHashMap::code`; this uses the local layout. See PROVENANCE.md.
 fn unpack_xi_4(packed: CoeffKey) -> [u32; 4] {
     [
         (packed & M0) as u32,
@@ -640,7 +577,6 @@ fn unpack_xi_4(packed: CoeffKey) -> [u32; 4] {
     ]
 }
 
-// Provenance: same packing reference as `unpack_xi_4`; local bit layout.
 fn pack_xi_4(xi: &[u32; 4]) -> CoeffKey {
     (xi[0] as CoeffKey)
         | ((xi[1] as CoeffKey) << 10)
@@ -648,8 +584,6 @@ fn pack_xi_4(xi: &[u32; 4]) -> CoeffKey {
         | ((xi[3] as CoeffKey) << 25)
 }
 
-// Provenance: packing implementation reference to SSeqCpp `MMilnor::Xi`/`ToXi`
-// and sseq `MilnorHashMap::code`; this uses the local layout. See PROVENANCE.md.
 fn unpack_xi_5(packed: CoeffKey) -> [u32; 5] {
     [
         (packed & M0) as u32,
@@ -660,7 +594,6 @@ fn unpack_xi_5(packed: CoeffKey) -> [u32; 5] {
     ]
 }
 
-// Provenance: same packing reference as `unpack_xi_5`; local bit layout.
 fn pack_xi_5(xi: &[u32; 5]) -> CoeffKey {
     (xi[0] as CoeffKey)
         | ((xi[1] as CoeffKey) << 10)
@@ -669,8 +602,6 @@ fn pack_xi_5(xi: &[u32; 5]) -> CoeffKey {
         | ((xi[4] as CoeffKey) << 31)
 }
 
-// Provenance: packing implementation reference to SSeqCpp `MMilnor::Xi`/`ToXi`
-// and sseq `MilnorHashMap::code`; this uses the local layout. See PROVENANCE.md.
 fn unpack_xi_6(packed: CoeffKey) -> [u32; 6] {
     [
         (packed & M0) as u32,
@@ -682,7 +613,6 @@ fn unpack_xi_6(packed: CoeffKey) -> [u32; 6] {
     ]
 }
 
-// Provenance: same packing reference as `unpack_xi_6`; local bit layout.
 fn pack_xi_6(xi: &[u32; 6]) -> CoeffKey {
     (xi[0] as CoeffKey)
         | ((xi[1] as CoeffKey) << 10)
@@ -692,8 +622,6 @@ fn pack_xi_6(xi: &[u32; 6]) -> CoeffKey {
         | ((xi[5] as CoeffKey) << 36)
 }
 
-// Provenance: packing implementation reference to SSeqCpp `MMilnor::Xi`/`ToXi`
-// and sseq `MilnorHashMap::code`; this uses the local layout. See PROVENANCE.md.
 fn unpack_xi_7(packed: CoeffKey) -> [u32; 7] {
     [
         (packed & M0) as u32,
@@ -706,7 +634,6 @@ fn unpack_xi_7(packed: CoeffKey) -> [u32; 7] {
     ]
 }
 
-// Provenance: same packing reference as `unpack_xi_7`; local bit layout.
 fn pack_xi_7(xi: &[u32; 7]) -> CoeffKey {
     (xi[0] as CoeffKey)
         | ((xi[1] as CoeffKey) << 10)
@@ -717,8 +644,6 @@ fn pack_xi_7(xi: &[u32; 7]) -> CoeffKey {
         | ((xi[6] as CoeffKey) << 40)
 }
 
-// Provenance: packing implementation reference to SSeqCpp `MMilnor::Xi`/`ToXi`
-// and sseq `MilnorHashMap::code`; this uses the local layout. See PROVENANCE.md.
 fn unpack_xi_8(packed: CoeffKey) -> [u32; 8] {
     let mut xi = [0_u32; 8];
     for (i, entry) in xi.iter_mut().enumerate() {
@@ -727,7 +652,6 @@ fn unpack_xi_8(packed: CoeffKey) -> [u32; 8] {
     xi
 }
 
-// Provenance: same packing reference as `unpack_xi_8`; local bit layout.
 fn pack_xi_8(xi: &[u32; 8]) -> CoeffKey {
     (xi[0] as CoeffKey)
         | ((xi[1] as CoeffKey) << 10)
@@ -739,8 +663,6 @@ fn pack_xi_8(xi: &[u32; 8]) -> CoeffKey {
         | ((xi[7] as CoeffKey) << 43)
 }
 
-// Provenance: packing implementation reference to SSeqCpp `MMilnor::Xi`/`ToXi`
-// and sseq `MilnorHashMap::code`; this uses the local layout. See PROVENANCE.md.
 fn unpack_xi_9(packed: CoeffKey) -> [u32; 9] {
     let mut xi = [0_u32; 9];
     for (i, entry) in xi.iter_mut().enumerate() {
@@ -749,15 +671,14 @@ fn unpack_xi_9(packed: CoeffKey) -> [u32; 9] {
     xi
 }
 
-// Provenance: same packing reference as `unpack_xi_9`; local bit layout.
 fn pack_xi_9(xi: &[u32; 9]) -> CoeffKey {
     debug_assert!(pack_padded_entries(xi).is_some());
     pack_padded_entries_unchecked(xi)
 }
 
 #[inline]
-// Provenance: directly ported and modified from Weinan Lin's SSeqCpp
-// `max_mask` (Apache-2.0). See PROVENANCE.md and THIRD_PARTY_NOTICES.md.
+// Provenance: direct source adaptation of Weinan Lin's SSeqCpp `max_mask`
+// (Apache-2.0). See PROVENANCE.md and THIRD_PARTY_NOTICES.md.
 fn max_mask(upper_bound: u32, mask: u32) -> u32 {
     let mut m = upper_bound & mask;
     let mut n = 0;
@@ -770,9 +691,9 @@ fn max_mask(upper_bound: u32, mask: u32) -> u32 {
     (upper_bound | n) & !mask
 }
 
-// Provenance: directly ported and modified from Weinan Lin's SSeqCpp
-// `MulMilnorV3` (Apache-2.0). The generated Rust functions retain its matrix
-// state and traversal; packing, widths, callbacks, and bounds are local.
+// Provenance: direct source adaptation of Weinan Lin's SSeqCpp `MulMilnorV3`
+// (Apache-2.0). The generated Rust functions retain its matrix state and
+// traversal; packing, widths, callbacks, and bounds are local.
 // See PROVENANCE.md and THIRD_PARTY_NOTICES.md.
 macro_rules! define_mul_packed_xi_v3_for_each {
     ($name:ident, $n:expr) => {
@@ -1051,9 +972,9 @@ where
     )
 }
 
-// Provenance: structural adaptation of sseq `PPartMultiplier` and shared
-// Milnor-product mathematics. This version caches weighted row decompositions,
-// uses recursive traversal and local packed output, and filters emitted terms.
+// Provenance: structural adaptation of sseq `PPartMultiplier`. This version
+// caches weighted row decompositions, uses recursive traversal and local packed
+// output, and filters emitted terms.
 fn multiply_packed_entries_with_row_cache_internal<F>(
     left_entries: &[u32],
     right_entries: &[u32],
@@ -1120,8 +1041,8 @@ where
 // Keeping the recursion state explicit avoids allocating a context object in
 // this product hot path.
 // Provenance: structural adaptation of sseq
-// `PPartMultiplier::{next_val, update, next}` and shared Milnor-product
-// mathematics. The explicit recursive state and hash-set parity are local.
+// `PPartMultiplier::{next_val, update, next}`. The explicit recursive state and
+// hash-set parity are local.
 #[allow(clippy::too_many_arguments)]
 fn multiply_rec<F>(
     row: usize,
@@ -1230,8 +1151,6 @@ fn max_column_index_entries(left_entries: &[u32], right_entries: &[u32]) -> usiz
     from_right.max(from_left)
 }
 
-// Provenance: packing implementation reference to SSeqCpp `MMilnor::Xi`/`ToXi`
-// and sseq `MilnorHashMap::code`; trimming and bit positions are local.
 fn unpack_packed_entries_trimmed(packed: CoeffKey) -> ([u32; PACKED_ENTRY_LIMIT], usize) {
     let mut entries = [0_u32; PACKED_ENTRY_LIMIT];
     let mut len = 0;
@@ -1322,8 +1241,6 @@ fn leaf_term_packed(
     Some(pack_padded_entries_unchecked(&entries))
 }
 
-// Provenance: packing implementation reference to SSeqCpp `MMilnor::Xi`/`ToXi`
-// and sseq `MilnorHashMap::code`; this decoder uses the local bit layout.
 fn milnor_from_packed(packed: CoeffKey) -> Milnor {
     let mut len = PACKED_ENTRY_LIMIT;
     while len > 0 && packed_entry(packed, len - 1) == 0 {

@@ -1,6 +1,6 @@
-// Portions of this file were structurally adapted or implemented with reference
-// to SSeqCpp, SpectralSequences/sseq, and Nassau's algorithm, then modified for
-// this project. Each affected routine is labeled below; see PROVENANCE.md,
+// Portions of this file were structurally adapted from SSeqCpp and
+// SpectralSequences/sseq, then modified for this project. Each affected routine
+// is labeled below; see PROVENANCE.md,
 // THIRD_PARTY_NOTICES.md, and LICENSE-APACHE.
 
 use std::cell::Cell;
@@ -854,11 +854,9 @@ impl Resolution {
     }
 
     // Provenance: structural adaptation of the t-major, s-inner traversal in
-    // sseq Nassau `Resolution::compute_through_bidegree`. The ordinary sseq
-    // `compute_through_bidegree_with_callback` is an implementation reference
-    // only for post-bidegree notification; its dependency scheduler is not
-    // retained. Cursor resume, triangular bounds, mode dispatch, and per-layer
-    // Milnor and signature growth are local.
+    // sseq Nassau `Resolution::compute_through_bidegree`. Cursor resume,
+    // triangular bounds, mode dispatch, callbacks, and per-layer Milnor and
+    // signature growth are local.
     pub fn compute_from_cursor_with_progress(
         &mut self,
         max_t: usize,
@@ -1028,8 +1026,7 @@ impl Resolution {
 
     // These options mirror the public fixed-t controls and are kept explicit
     // so the hot path does not allocate or clone a configuration object.
-    // Provenance: structural adaptation of SSeqCpp `Resolve`'s fixed-t loop and
-    // implementation reference to sseq's resolution computation loops.
+    // Provenance: structural adaptation of SSeqCpp `Resolve`'s fixed-t loop.
     #[allow(clippy::too_many_arguments)]
     fn compute_from_cursor_fixed_t_batch_with_progress(
         &mut self,
@@ -1091,8 +1088,8 @@ impl Resolution {
         })
     }
 
-    // Provenance: local verification wrapper around the fixed-t organization
-    // structurally adapted from SSeqCpp `Resolve`. See PROVENANCE.md.
+    // Provenance: structural adaptation of the fixed-t organization in SSeqCpp
+    // `Resolve`; shadow verification is local.
     fn compute_fixed_t_batch_shadow_layer(
         &mut self,
         t: usize,
@@ -2159,8 +2156,8 @@ impl Resolution {
         Ok(group_result)
     }
 
-    // Provenance: single-worker form of the fixed-t per-s organization
-    // structurally adapted from SSeqCpp `Resolve`; mutation strategy is local.
+    // Provenance: structural adaptation of the fixed-t per-s organization in
+    // SSeqCpp `Resolve`; the single-worker mutation strategy is local.
     fn compute_isolated_bidegree_group_in_place(
         &mut self,
         group: &[usize],
@@ -2178,8 +2175,8 @@ impl Resolution {
         )
     }
 
-    // Provenance: progress-reporting single-worker form of the fixed-t per-s
-    // organization structurally adapted from SSeqCpp `Resolve`.
+    // Provenance: structural adaptation of the fixed-t per-s organization in
+    // SSeqCpp `Resolve`; progress reporting is local.
     fn compute_isolated_bidegree_group_in_place_with_progress<F>(
         &mut self,
         group_index: usize,
@@ -3200,11 +3197,6 @@ impl Resolution {
             .retain(|key, _| key.t >= keep_from);
     }
 
-    // Provenance: implementation reference to the high-level candidate choice
-    // in sseq `MilnorSubalgebra::optimal_for`, which takes the last candidate
-    // in an initial applicable prefix. Its data flow is not retained here:
-    // this version scores an explicit candidate list using local controls,
-    // adjacent signature dimensions, and a family-priority tie-break.
     fn choose_subalgebra<'a>(
         &mut self,
         s: usize,
@@ -3317,8 +3309,6 @@ impl Resolution {
         (Some(domain), Some(target), Some(boundary_domain))
     }
 
-    // Provenance: implementation reference and shared mathematics with sseq
-    // `Resolution::step_resolution`; this path computes homology directly.
     fn step_naive(&mut self, s: usize, t: usize) -> Result<usize, String> {
         let reps = self.naive_homology_representatives(s, t)?;
         let added = reps.len();
@@ -3330,8 +3320,8 @@ impl Resolution {
     }
 
     // Provenance: structural adaptation of sseq
-    // `Resolution::step_resolution_with_subalgebra` and implementation of
-    // Nassau's published Algorithm 2; local batching and caches differ.
+    // `Resolution::step_resolution_with_subalgebra`; local batching and caches
+    // differ.
     fn step_algorithm2(
         &mut self,
         s: usize,
@@ -4057,8 +4047,6 @@ impl Resolution {
         Ok(solver)
     }
 
-    // Provenance: implementation reference and shared mathematics with sseq
-    // `Resolution::step_resolution`; this computes kernel modulo image locally.
     fn naive_homology_representatives(
         &mut self,
         s: usize,
@@ -4927,8 +4915,8 @@ impl Resolution {
         routing
     }
 
-    // Provenance: local optimization of the signature lifting structurally
-    // adapted from sseq `step_resolution_with_subalgebra`.
+    // Provenance: structural adaptation of signature lifting in sseq
+    // `step_resolution_with_subalgebra`; the cached translation is local.
     fn signature_to_zero_translation(
         &mut self,
         s: usize,
@@ -5083,9 +5071,6 @@ impl Resolution {
             .collect()
     }
 
-    // Provenance: implementation reference to sseq `Resolution::add_generators`,
-    // `FreeModule::add_generators`, and
-    // `FreeModuleHomomorphism::add_generators_from_rows`; storage is local.
     fn add_generator(&mut self, s: usize, t: usize, mut differential: Vec<ModuleTerm>) -> usize {
         while self.gens_by_s.len() <= s {
             self.gens_by_s.push(Vec::new());

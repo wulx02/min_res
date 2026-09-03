@@ -230,18 +230,18 @@ cargo build --release --locked
 ## Acknowledgments and third-party code
 
 This project was implemented by OpenAI Codex at the direction of the repository
-owner. During development, Codex translated or
-adapted some upstream code and used other code, designs, and mathematical
-methods as references:
+owner. During development, Codex directly translated or structurally adapted
+upstream code and designs. The relevant sources, together with the published
+mathematical method implemented here, are:
 
 1. [SSeqCpp](https://github.com/WayneLin92/SSeqCpp), by Weinan Lin. The fast
    Milnor multiplication kernel is a direct Rust adaptation of SSeqCpp's
-   `MulMilnorV3`; additional function-level relationships are documented in
+   `MulMilnorV3`; additional structural adaptations are documented in
    `PROVENANCE.md`.
 2. The `ext` implementation in
    [SpectralSequences/sseq](https://github.com/SpectralSequences/sseq), which
-   Codex used as a structural and implementation reference for the specific
-   functions listed in `PROVENANCE.md`.
+   Codex structurally adapted for the specific functions listed in
+   `PROVENANCE.md`.
 3. Christian Nassau's
    [signature-filtration algorithm](https://arxiv.org/abs/1910.04063).
 

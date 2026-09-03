@@ -1,6 +1,6 @@
-// Portions of this file were structurally adapted or implemented with reference
-// to SpectralSequences/sseq and Nassau's algorithm, then modified for this
-// project. Each affected routine is labeled below; see PROVENANCE.md,
+// Portions of this file were structurally adapted from SpectralSequences/sseq,
+// then modified for this project. Each affected routine is labeled below; see
+// PROVENANCE.md,
 // THIRD_PARTY_NOTICES.md, and LICENSE-APACHE.
 
 use std::{
@@ -272,8 +272,6 @@ pub struct Subalgebra {
 }
 
 impl Subalgebra {
-    // Provenance: implementation reference to sseq `MilnorSubalgebra::new`;
-    // the named A-family constructor and validation are local.
     pub fn a(n: usize) -> Result<Self, String> {
         if n > 5 {
             return Err("A(n) is limited to n <= 5 in this implementation".into());
@@ -298,8 +296,6 @@ impl Subalgebra {
         Self::b_profile("B3321", vec![3, 3, 2, 1])
     }
 
-    // Provenance: implementation reference to sseq `MilnorSubalgebra::new`;
-    // registered B profiles and labels are local extensions.
     pub fn b_profile(label: impl Into<String>, profile: Vec<u32>) -> Result<Self, String> {
         validate_finite_profile(&profile)?;
         validate_registered_b_profile(&profile)?;
@@ -315,8 +311,6 @@ impl Subalgebra {
         )
     }
 
-    // Provenance: uses the profile/signature design referenced from sseq
-    // `MilnorSubalgebra`; the F-family construction and degree bound are local.
     pub fn f(n: usize, max_degree: usize) -> Result<Self, String> {
         if n == 0 {
             return Err("F(n) expects n >= 1".into());
@@ -341,8 +335,6 @@ impl Subalgebra {
         Ok(subalgebra)
     }
 
-    // Provenance: uses the profile/signature design referenced from sseq
-    // `MilnorSubalgebra`; the F'-family construction and ordering are local.
     pub fn fprime(n: usize, max_degree: usize) -> Result<Self, String> {
         if n == 0 {
             return Err("F'(n) expects n >= 1".into());
@@ -371,8 +363,6 @@ impl Subalgebra {
         Ok(subalgebra)
     }
 
-    // Provenance: implementation reference to sseq `MilnorSubalgebra::new`
-    // and its signature iterator; local families and bounds differ.
     fn from_profile(
         family: Family,
         n: usize,
@@ -395,8 +385,6 @@ impl Subalgebra {
         Self::from_signatures(family, n, label, profile, bit_order, signatures)
     }
 
-    // Provenance: implementation reference to sseq `MilnorSubalgebra::new`;
-    // the packed index and validation are local. See PROVENANCE.md.
     fn from_signatures(
         family: Family,
         n: usize,
@@ -615,8 +603,6 @@ impl Subalgebra {
             .sum()
     }
 
-    // Provenance: shared Nassau lower-line mathematics. The cited sseq
-    // revision has no counterpart for this general-profile slope.
     pub fn profile_d(&self) -> usize {
         self.profile
             .iter()
@@ -632,8 +618,6 @@ impl Subalgebra {
             .unwrap_or(0)
     }
 
-    // Provenance: shared Nassau lower-line mathematics. The cited sseq
-    // revision has no counterpart for this general-profile test.
     pub fn profile_lower_ok(&self, s: usize, t: usize) -> bool {
         let tau = self.profile_tau();
         let d = self.profile_d();
@@ -915,9 +899,6 @@ impl Subalgebra {
     /// task `s` at internal degree `t`. In fixed-t layer code this `s` is the
     /// task index for `H_s(D^(t))`, not the homological degree `s + 1` of
     /// generators produced by the task.
-    // Provenance: the A-family branch uses sseq
-    // `MilnorSubalgebra::{top_degree, optimal_for}` as an implementation
-    // reference; the task index, strict test, and other families are local.
     pub fn lower_line_applies(&self, s: usize, t: usize) -> bool {
         match self.family {
             Family::A => {
@@ -979,9 +960,6 @@ impl Subalgebra {
     }
 
     /// Bound for the fixed-t task index `s`, not for output degree `s + 1`.
-    // Provenance: the A-family branch uses sseq
-    // `MilnorSubalgebra::{top_degree, optimal_for}` as an implementation
-    // reference; the task index and other-family formulas are local.
     pub fn lower_line_bound(&self, s: usize) -> usize {
         match self.family {
             Family::A => {
@@ -1567,9 +1545,9 @@ fn fprime_bit_order(n: usize, max_degree: usize) -> Vec<(usize, u32)> {
 }
 
 // Provenance: structural adaptation of sseq
-// `MilnorSubalgebra::iter_signatures` and `SignatureIterator::{new, next}`, and
-// shared signature mathematics. This version uses degree-bounded recursion and
-// materializes the results before sorting.
+// `MilnorSubalgebra::iter_signatures` and `SignatureIterator::{new, next}`.
+// This version uses degree-bounded recursion and materializes the results before
+// sorting.
 fn generate_signatures(
     index: usize,
     profile: &[u32],
@@ -1678,9 +1656,8 @@ fn sort_signatures(family: Family, bit_order: &[(usize, u32)], signatures: &mut 
     signatures.sort_by(|a, b| compare_signature_order(family, bit_order, a, b));
 }
 
-// Provenance: structural adaptation of sseq `SignatureIterator` ordering and
-// shared signature-order mathematics. Explicit tie-breaks and F/F' ordering
-// are local.
+// Provenance: structural adaptation of sseq `SignatureIterator` ordering.
+// Explicit tie-breaks and F/F' ordering are local.
 fn compare_signature_order(
     family: Family,
     bit_order: &[(usize, u32)],

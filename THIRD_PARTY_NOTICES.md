@@ -1,29 +1,27 @@
 # Third-party notices
 
-This project was implemented by OpenAI Codex. During development, Codex
-translated or adapted some upstream code and used other code
-and designs as references. A detailed function-by-function account is in
-[PROVENANCE.md](PROVENANCE.md).
+This project was implemented by OpenAI Codex. During development, Codex directly
+translated or structurally adapted parts of upstream code and designs. A
+detailed function-by-function account is in [PROVENANCE.md](PROVENANCE.md).
 
 ## 1. SSeqCpp
 
-Codex directly adapted part of the Milnor multiplication code and used
-additional SSeqCpp functions as structural or implementation references. The
-local-to-upstream function mapping is in [PROVENANCE.md](PROVENANCE.md).
+Codex directly adapted part of the Milnor multiplication code and structurally
+adapted additional SSeqCpp functions. The local-to-upstream function mapping is
+in [PROVENANCE.md](PROVENANCE.md).
 
 - Project: [SSeqCpp](https://github.com/WayneLin92/SSeqCpp)
 - Author and copyright holder: Weinan Lin
 - License: Apache License 2.0; see [LICENSE-APACHE](LICENSE-APACHE)
 
-The clearest direct adaptation is the optimized Milnor multiplication code in
-`src/milnor.rs`: `max_mask` and the
+The directly adapted code is in `src/milnor.rs`: `max_mask` and the
 `define_mul_packed_xi_v3_for_each!` kernel follow SSeqCpp's `max_mask` and
 `MulMilnorV3`. They were translated to Rust and modified for this project's
 representation and interfaces.
 
-Codex also used SSeqCpp functions for packed Milnor conversion, sparse `F_2`
-normalization, linear algebra, and fixed-internal-degree computation as
-references. The exact relationship is recorded function by function in
+Codex also structurally adapted SSeqCpp functions for sparse `F_2`
+normalization, linear algebra, and fixed-internal-degree computation. The exact
+relationships are recorded function by function in
 [PROVENANCE.md](PROVENANCE.md) and in comments near the affected source.
 
 SSeqCpp's upstream license contains the following notice:
@@ -35,8 +33,8 @@ Apache License 2.0.
 
 ## 2. SpectralSequences/sseq
 
-Codex used code and designs from the `ext` implementation in the
-SpectralSequences/sseq repository as structural and implementation references.
+Codex structurally adapted code and designs from the `ext` implementation in
+the SpectralSequences/sseq repository.
 
 - Project: [SpectralSequences/sseq](https://github.com/SpectralSequences/sseq),
   especially its [`ext`](https://github.com/SpectralSequences/sseq/tree/ac6f59d751307439a9ccc05ef6f08d9eea22e3dd/ext)
@@ -54,8 +52,8 @@ License 2.0 option for material derived from SpectralSequences/sseq.
 
 The resolution algorithm is based on Christian Nassau's paper,
 [“Computing a minimal resolution over the Steenrod algebra”](https://arxiv.org/abs/1910.04063).
-See [PROVENANCE.md](PROVENANCE.md) for the function-level account of the
-published mathematical algorithm and the code provenance of this project.
+See [PROVENANCE.md](PROVENANCE.md) for the code-provenance mapping and the
+functions that implement the published algorithm.
 
 ## 4. SplitMix64 output mixer
 
