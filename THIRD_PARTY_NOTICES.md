@@ -39,7 +39,7 @@ Codex used code and designs from the `ext` implementation in the
 SpectralSequences/sseq repository as structural and implementation references.
 
 - Project: [SpectralSequences/sseq](https://github.com/SpectralSequences/sseq),
-  especially its [`ext`](https://github.com/SpectralSequences/sseq/tree/e1e0f6f30ce56855c71793808577d9369a5c2f21/ext)
+  especially its [`ext`](https://github.com/SpectralSequences/sseq/tree/ac6f59d751307439a9ccc05ef6f08d9eea22e3dd/ext)
   directory
 - Authors named in the `ext` package metadata: Hood Chatham, Dexter Chua, and
   Joey Beauvais-Feisthauer
@@ -50,16 +50,12 @@ each entry, is in [PROVENANCE.md](PROVENANCE.md). Other upstream contributors
 retain attribution for their contributions. This distribution uses the Apache
 License 2.0 option for material derived from SpectralSequences/sseq.
 
-## 3. Nassau algorithm and cnassau/steenrod
+## 3. Nassau algorithm
 
 The resolution algorithm is based on Christian Nassau's paper,
 [“Computing a minimal resolution over the Steenrod algebra”](https://arxiv.org/abs/1910.04063).
-Nassau's [cnassau/steenrod](https://github.com/cnassau/steenrod) implementation
-is a related implementation licensed under GPL-2.0. It is cited for context,
-but no source code from it is copied, translated, linked, or distributed in
-this project. The GPL-2.0 license therefore does not apply to this
-distribution. See [PROVENANCE.md](PROVENANCE.md) for the distinction between
-the published mathematical algorithm and the code provenance of this project.
+See [PROVENANCE.md](PROVENANCE.md) for the function-level account of the
+published mathematical algorithm and the code provenance of this project.
 
 ## 4. SplitMix64 output mixer
 

@@ -595,7 +595,8 @@ impl XorBasis {
     }
 
     // Provenance: structural adaptation of SSeqCpp `AddToSpace`/`GetSpace`
-    // and sseq `Subspace::add_vector`. See PROVENANCE.md.
+    // and implementation reference to sseq `Subspace::add_vector`; unlike
+    // sseq, this incrementally installs one reduced pivot. See PROVENANCE.md.
     fn insert(&mut self, vector: BitVec) -> Option<BitVec> {
         let reduced = self.reduce(vector);
         let pivot = reduced.leading_one()?;

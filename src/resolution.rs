@@ -3200,11 +3200,11 @@ impl Resolution {
             .retain(|key, _| key.t >= keep_from);
     }
 
-    // Provenance: structural adaptation of the candidate-selection stage in
-    // sseq `MilnorSubalgebra::optimal_for`, which takes the last candidate in
-    // its initial consecutive applicable prefix. This version instead uses an
-    // explicit candidate list, certification/force controls, adjacent
-    // signature dimensions as its cost, and a local family-priority tie-break.
+    // Provenance: implementation reference to the high-level candidate choice
+    // in sseq `MilnorSubalgebra::optimal_for`, which takes the last candidate
+    // in an initial applicable prefix. Its data flow is not retained here:
+    // this version scores an explicit candidate list using local controls,
+    // adjacent signature dimensions, and a family-priority tie-break.
     fn choose_subalgebra<'a>(
         &mut self,
         s: usize,

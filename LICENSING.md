@@ -12,7 +12,3 @@ Recipients of the combined distribution must comply with both licenses. The
 origin and licensing of the affected source code are described in
 [PROVENANCE.md](PROVENANCE.md) and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-The GPL-2.0-licensed cnassau/steenrod project is cited only as a related
-implementation of Christian Nassau's published algorithm. No source code from
-cnassau/steenrod is copied, translated, linked, or distributed here.

@@ -615,8 +615,8 @@ impl Subalgebra {
             .sum()
     }
 
-    // Provenance: implementation reference and shared Nassau lower-line
-    // mathematics with sseq `MilnorSubalgebra::{top_degree, optimal_for}`.
+    // Provenance: shared Nassau lower-line mathematics. The cited sseq
+    // revision has no counterpart for this general-profile slope.
     pub fn profile_d(&self) -> usize {
         self.profile
             .iter()
@@ -632,8 +632,8 @@ impl Subalgebra {
             .unwrap_or(0)
     }
 
-    // Provenance: implementation reference and shared Nassau lower-line
-    // mathematics with sseq `MilnorSubalgebra::optimal_for`.
+    // Provenance: shared Nassau lower-line mathematics. The cited sseq
+    // revision has no counterpart for this general-profile test.
     pub fn profile_lower_ok(&self, s: usize, t: usize) -> bool {
         let tau = self.profile_tau();
         let d = self.profile_d();
@@ -669,9 +669,10 @@ impl Subalgebra {
     }
 
     // Provenance: structural adaptation of sseq
-    // `MilnorSubalgebra::{packed_signature, signature_mask}`. This version
-    // applies the profile coordinate by coordinate in the local packed layout
-    // and additionally returns the complementary quotient.
+    // `MilnorSubalgebra::{has_signature, signature_mask}`. The cited sseq
+    // revision compares unpacked low-bit signatures; this version extracts one
+    // in the local packed layout and additionally returns the complementary
+    // quotient.
     pub fn split_profile_signature_packed(&self, x: CoeffKey) -> Option<(CoeffKey, CoeffKey)> {
         self.profile_cache_key()?;
         let mut sig = [0_u32; PACKED_ENTRY_LIMIT];
@@ -775,8 +776,8 @@ impl Subalgebra {
     }
 
     // Provenance: structural adaptation of sseq
-    // `MilnorSubalgebra::signature_mask`. This version tests each profile field
-    // in the local packed layout and handles wide profile entries explicitly.
+    // `MilnorSubalgebra::has_signature` for the zero signature. This version
+    // tests each field in the local packed layout and handles wide entries.
     pub fn profile_signature_is_zero_packed_unchecked(&self, x: CoeffKey) -> bool {
         debug_assert!(self.profile_cache_key().is_some());
         for i in 0..PACKED_ENTRY_LIMIT {
@@ -874,8 +875,9 @@ impl Subalgebra {
     }
 
     // Provenance: structural adaptation of sseq
-    // `MilnorSubalgebra::packed_signature`. This version uses the project's
-    // fixed-field packing and extends the operation to local F/F' families.
+    // `MilnorSubalgebra::has_signature`. The cited sseq revision compares an
+    // unpacked element to a requested signature; this version extracts that
+    // signature in fixed-field packing and extends it to local F/F' families.
     fn signature_packed(&self, x: CoeffKey) -> CoeffKey {
         let mut entries = [0_u32; PACKED_ENTRY_LIMIT];
         for (i, &profile_entry) in self.profile.iter().enumerate() {
@@ -913,8 +915,9 @@ impl Subalgebra {
     /// task `s` at internal degree `t`. In fixed-t layer code this `s` is the
     /// task index for `H_s(D^(t))`, not the homological degree `s + 1` of
     /// generators produced by the task.
-    // Provenance: implementation reference and shared Nassau lower-line
-    // mathematics with sseq `MilnorSubalgebra::{top_degree, optimal_for}`.
+    // Provenance: the A-family branch uses sseq
+    // `MilnorSubalgebra::{top_degree, optimal_for}` as an implementation
+    // reference; the task index, strict test, and other families are local.
     pub fn lower_line_applies(&self, s: usize, t: usize) -> bool {
         match self.family {
             Family::A => {
@@ -976,8 +979,9 @@ impl Subalgebra {
     }
 
     /// Bound for the fixed-t task index `s`, not for output degree `s + 1`.
-    // Provenance: implementation reference and shared Nassau lower-line
-    // mathematics with sseq `MilnorSubalgebra::{top_degree, optimal_for}`.
+    // Provenance: the A-family branch uses sseq
+    // `MilnorSubalgebra::{top_degree, optimal_for}` as an implementation
+    // reference; the task index and other-family formulas are local.
     pub fn lower_line_bound(&self, s: usize) -> usize {
         match self.family {
             Family::A => {

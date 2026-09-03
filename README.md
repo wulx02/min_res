@@ -243,10 +243,7 @@ methods as references:
    Codex used as a structural and implementation reference for the specific
    functions listed in `PROVENANCE.md`.
 3. Christian Nassau's
-   [signature-filtration algorithm](https://arxiv.org/abs/1910.04063) and the
-   related [cnassau/steenrod](https://github.com/cnassau/steenrod)
-   implementation. The latter is cited for context; no source code from that
-   GPL-2.0-licensed project is copied, translated, linked, or distributed here.
+   [signature-filtration algorithm](https://arxiv.org/abs/1910.04063).
 
 See [PROVENANCE.md](PROVENANCE.md) for the function-by-function account and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for licenses and attribution.
